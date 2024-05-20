@@ -1,0 +1,9 @@
+DataNode:
+  Host: 127.0.0.1
+  Port: 9001
+  DataNodeId: 1
+  TransFilePort: 9002
+  HeartbeatInterval: 250
+  HeartBeatRetry: 3
+  MetaFileName: data.meta
+  DataDir: F://TrainFS//DataNode//DataNode

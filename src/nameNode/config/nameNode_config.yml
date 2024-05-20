@@ -1,0 +1,12 @@
+NameNode:
+  Host: 127.0.0.1
+  Port: 50070
+  NameNodeId: 1
+  DataNodeHeartBeatInterval: 1000
+  DataNodeHeartBeatTimeout: 10000
+  TrashInterval: 1000
+  MetaFileName: data.meta
+  DataDir: F:\\TrainFS\\NameNode
+  # model: Single | Cluster
+  Model: Single
+  PeerNameNodes: [127.0.0.1:50001,127.0.0.1:50002,127.0.0.1:50003]
