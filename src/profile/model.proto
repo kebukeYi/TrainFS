@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+option go_package = "../profile;proto";
+
+service ClientToNameServer{
+  rpc GetFileInfo(FileInfo) returns (FileInfo);
+}
+
+service ClientToDataServer{
+  rpc GetFileData(FileInfo) returns (stream File);
+}
+
+message FileInfo{
+  string name = 1;
+  int32 length = 2;
+}
+
+message File{
+  bytes data = 1;
+}
+
