@@ -1,0 +1,7 @@
+DataNode:
+  NameNodeHost: 127.0.0.1:50070
+  Host: 127.0.0.1:9001
+  DataNodeId: 1
+  HeartbeatInterval: 5000
+  HeartBeatRetry: 3
+  DataDir: F://TrainFS//DataNode//DataNode

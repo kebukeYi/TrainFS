@@ -2,20 +2,172 @@ syntax = "proto3";
 
 option go_package = "../profile;proto";
 
-service ClientToNameServer{
-  rpc GetFileInfo(FileInfo) returns (FileInfo);
+service ClientToNameService{
+  rpc PutFile(FileOperationArg)returns (DataNodeChain);
+  rpc ConfirmFile(ConfirmFileArg)returns (ConfirmFileReply);
+  rpc GetFile(FileOperationArg)returns (FileLocationInfo);
+  rpc GetFileLocation(FileOperationArg)returns (FileLocationInfo);
+  rpc GetFileStoreChain(FileOperationArg)returns (DataNodeChain);
+  rpc DeleteFile(FileOperationArg)returns (DeleteFileReply);
+  rpc ListDir(FileOperationArg)returns (DirMetaList);
+  rpc ReName(FileOperationArg) returns (ReNameReply);
 }
 
-service ClientToDataServer{
-  rpc GetFileData(FileInfo) returns (stream File);
+service ClientToDataService{
+  rpc GetChunk(FileOperationArg)returns (stream FileDataStream);
+  rpc PutChunk(stream FileDataStream)returns (FileLocationInfo);
 }
 
-message FileInfo{
-  string name = 1;
-  int32 length = 2;
+service NameToDataService{
+  rpc GetDataNodeInfo(FileOperationArg)returns (FileLocationInfo);
 }
 
-message File{
-  bytes data = 1;
+service DataToNameService{
+  rpc RegisterDataNode(DataNodeRegisterArg)returns (DataNodeRegisterReply);
+  rpc HeartBeat(HeartBeatArg)returns (HeartBeatReply);
+  rpc ChunkReport(FileLocationInfo)returns (ChunkReportReply);
+  rpc CommitChunk(CommitChunkArg)returns (CommitChunkReply);
+}
+
+service DataToDataService{
+  rpc PutChunk(stream FileDataStream)returns (FileLocationInfo);
+}
+
+message ChunkReportReply{
+  bool success = 1;
+  string context = 2;
+}
+message ReNameReply {
+  bool success = 1;
+  string context = 2;
+}
+
+message DeleteFileReply{
+  bool success = 1;
+  string context = 2;
+}
+
+message FileOperationArg{
+  enum Operation{
+    MKDIR = 0;
+    DELETE = 1;
+    RENAME = 2;
+    READ = 3;
+    WRITE = 4;
+    LISTDIR = 5;
+  }
+  Operation operation = 1;
+  string fileName = 2;
+  string newFileName = 3;
+  int32 chunkId = 4;
+  int64 chunkNum = 5;
+  int32 replicaNum = 6;
+  int64 fileSize = 7;
+}
+
+message CheckCommitChunkArg{
+  string fileName = 1;
+  int32 chunkId = 2;
+  repeated string DataNodeAddress = 3;
+}
+message CheckCommitChunkReply{
+  bool success = 1;
+  string context = 2;
+  repeated string failDataNodeAddress = 3;
+}
+
+enum ChunkReplicateStatus {
+  LostToReplicate = 0;
+  NormalToReplicate = 1;
+}
+
+message CommitChunkArg{
+  string filePathName = 1;
+  string fileChunkName = 2;
+  ChunkReplicateStatus operation = 3;
+  int64 fileSize = 4;
+  int32 chunkId = 5;
+  repeated string DataNodeAddress = 6;
+}
+message CommitChunkReply{
+  bool success = 1;
+  string context = 2;
+  repeated string failDataNodeAddress = 3;
+}
+message ConfirmFileArg{
+  string fileName = 1;
+  FileLocationInfo fileLocationInfo = 2;
+  bool ack = 3;
+}
+message ConfirmFileReply{
+  bool success = 1;
+  string context = 2;
+}
+
+message FileMeta{
+  string KeyFileName = 1;
+  string fileName = 2;
+  int64 fileSize = 3;
+  bool isDir = 4;
+}
+
+message DirMetaList {
+  repeated FileMeta metaList = 1;
+}
+
+message FileLocationInfo{
+  int64 fileSize = 1;
+  int64 chunkNum = 2;
+  string dataNodeAddress = 3;
+  repeated ChunkInfo chunks = 4;
+}
+
+message ChunkInfo{
+  int32 chunkId = 1;
+  string filePathName = 2;
+  string filePathChunkName = 3;
+  DataNodeChain dataNodeAddress = 4;
+}
+
+message DataNodeChain{
+  repeated string dataNodeAddress = 1;
+}
+
+message FileDataStream{
+  ChunkReplicateStatus operation = 1;
+  bytes data = 2;
+  string filePathName = 3;
+  string filePathChunkName = 4;
+  string address = 5;
+  string srcName = 6;
+  int32 chunkId = 7;
+  repeated  string  dataNodeChain = 8;
+}
+
+message DataNodeRegisterArg{
+  string dataNodeAddress = 1;
+  uint64 freeSpace = 2;
+}
+
+message DataNodeRegisterReply{
+  bool success = 1;
+  string context = 2;
+}
+
+message ReplicaChunkReply{
+  bool success = 1;
+  string context = 2;
+}
+
+message HeartBeatArg{
+  string dataNodeAddress = 1;
+  uint64 freeSpace = 2;
+}
+
+message HeartBeatReply{
+  repeated string filePathNames = 2;
+  repeated string filePathChunkNames = 3;
+  repeated string newChunkSevers = 4;
+  repeated string trashFilePathChunkNames = 5;
 }
 

@@ -1,4 +1,7 @@
 Client:
+  ClientId: 1
   NameNode:
-    Host: 127.0.0.1
-    Port: 9000
+    Host: 127.0.0.1:50070
+    ChunkSize: 102400
+    ChunkReplicaNum: 1
+    ConfirmFileAck: false

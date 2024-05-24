@@ -15,7 +15,6 @@ type NameNodeConfig struct {
 
 type NameNode struct {
 	Host                      string   `yaml:"Host"`
-	Port                      int      `yaml:"Port"`
 	NameNodeId                string   `yaml:"NameNodeId"`
 	DataNodeHeartBeatInterval int      `yaml:"DataNodeHeartBeatInterval"`
 	DataNodeHeartBeatTimeout  int      `yaml:"DataNodeHeartBeatTimeout"`
@@ -35,11 +34,12 @@ const (
 var conf *NameNodeConfig
 
 func GetDataNodeConfig() *NameNodeConfig {
+	inits()
 	return conf
 }
 
-func init() {
-	fileName := "nameNode_config.yml"
+func inits() {
+	fileName := "src/nameNode/config/nameNode_config.yml"
 	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE, 0777)
 	defer file.Close()
 	if err != nil {
