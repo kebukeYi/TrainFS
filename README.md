@@ -55,4 +55,4 @@
 1. DataNode在每次启动时，都向NameNode注册自己，同时上报自己存储的磁盘剩余空间信息；
 2. DataNode在每次启动时, 上报一次自己的全量存储文件块情况,也就是元数据，NameNode需要知道这个；
 3. 周期上报心跳，NameNode知道自己还在线存活；
-4. 保存用户的文件块信息，DataNode会保存这些文件块信息，并记录到本地文件系统存储引擎中，同时记录元数据,持久化到本次的kv映射元数据中[file1_chunk1,file1_chunk2,file_3_chunk1,file_3_chunk2...];
+4. 保存用户的文件块信息，DataNode会保存这些文件块信息，并记录到本地文件系统存储引擎中，同时记录元数据,持久化到本次的kv映射元数据中[file1_chunk_1,file1_chunk_2,file_3_chunk_1,file_3_chunk_2...];
