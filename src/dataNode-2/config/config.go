@@ -33,9 +33,14 @@ func GetDataNodeConfig() *DataNode {
 }
 
 func inits() {
-	fileName := "src/dataNode-2/config/dataNode_config.yml"
+	//fileName := "./dataNode_config.yml"
 	//fileName := "dataNode_config.yml"
-	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE, 0777)
+
+	//fileName := "src/dataNode-2/config/dataNode_config.yml"
+	//fileName := "/TrainFS/src/dataNode-2/config/dataNode_config.yml"
+
+	fileName := "./config/dataNode_config.yml"
+	file, err := os.OpenFile(fileName, os.O_RDWR, 0777)
 	defer file.Close()
 	if err != nil {
 		log.Fatalf(" fail to read fileName: %s, err: %s ;\n", fileName, err)

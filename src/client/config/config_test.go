@@ -7,5 +7,5 @@ import (
 
 func TestGetClientConfig(t *testing.T) {
 	clientConfig := GetClientConfig()
-	fmt.Println(clientConfig)
+	fmt.Printf("clientConfig: %v\n", clientConfig)
 }

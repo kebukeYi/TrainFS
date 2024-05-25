@@ -26,6 +26,7 @@ func (dataNode *DataNode) Register() (bool, error) {
 	}
 	if reply.GetSuccess() {
 		fmt.Println("DataNode send " + dataNode.Config.Host + " register success...")
+		go dataNode.ChunkReportTask()
 		return true, nil
 	} else {
 		fmt.Printf("DataNode register failed, err context:%s \n", reply.Context)
@@ -53,6 +54,9 @@ func (dataNode *DataNode) ChunkReportTask() {
 	}
 	if reply.GetSuccess() {
 		fmt.Printf("DataNode report chunk success, chunkNum:%d\n", len(chunkInfos))
+		go dataNode.HeartBeatTask()
+		go dataNode.DoTrashTask()
+		go dataNode.DoReplicaTask()
 	} else {
 		fmt.Println(err)
 	}
@@ -60,17 +64,22 @@ func (dataNode *DataNode) ChunkReportTask() {
 
 func (dataNode *DataNode) HeartBeatTask() {
 	interval := dataNode.Config.HeartbeatInterval
+	retry := 0
 	for {
 		time.Sleep(time.Duration(interval) * time.Millisecond)
 		nameServiceClient, err := dataNode.getGrpcNameNodeServerConn(dataNode.Config.NameNodeHost)
 		if err != nil {
-			// todo dataNode心跳连接不上,需要一直重试
 			fmt.Printf("DataNode get heartbeat con failed, err context:%s \n", err)
 			continue
 		}
 		heartBeatReply, err := nameServiceClient.HeartBeat(context.Background(), &proto.HeartBeatArg{DataNodeAddress: dataNode.Config.Host})
 		if err != nil {
-			// todo dataNode心跳连接不上,需要一直重试
+			retry++
+			if retry > dataNode.Config.HeartBeatRetry {
+				go dataNode.LiveDetectionTask(dataNode.Config.NameNodeHost)
+				return
+			}
+			// todo toDataNode 的心跳连接不上,需要一直重试, 重试成功后,需要再次发送全量数据
 			// 1.nameNode宕机 2.网络原因
 			fmt.Printf("DataNode HeartBeat() failed, err context:%s \n", err)
 			continue
@@ -98,6 +107,28 @@ func (dataNode *DataNode) HeartBeatTask() {
 				}
 			}()
 		}
+	}
+}
+
+func (dataNode *DataNode) LiveDetectionTask(address string) {
+	interval := dataNode.Config.HeartbeatInterval
+	for {
+		time.Sleep(time.Duration(interval) * time.Millisecond)
+		nameServiceClient, err := dataNode.getGrpcNameNodeServerConn(address)
+		if err != nil {
+			fmt.Printf("DataNode[%s] getGrpcNameNodeServerConn() con failed, err context:%s \n", dataNode.Config.Host, err)
+			continue
+		}
+		detectionReply, err := nameServiceClient.LiveDetection(context.Background(), &proto.LiveDetectionArg{DataNodeAddress: dataNode.Config.Host})
+		if err != nil {
+			fmt.Printf("DataNode[%s] send address:%s liveDetection con failed, err context:%s \n", address, dataNode.Config.Host, err)
+			continue
+		}
+		if detectionReply.Success {
+			go dataNode.Register()
+			return
+		}
+
 	}
 }
 

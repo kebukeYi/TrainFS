@@ -8,10 +8,12 @@ import (
 
 func main() {
 	client := cli.NewClient()
-	// fmt.Println(client)
-	//localPath := "F:\\testGPU.py"
-	localPathGet := "F:\\getTestGPU.py"
-	remotePath := "/user/testGPU.py"
+	fmt.Println(client)
+	//localPath := "F:\\yyyyy.jpg"
+	//localPathGet := "F:\\getappyyyyy.jpg"
+	localPathGet := "F:\\getlocalyyyyy.jpg"
+	//remotePath := "/user/app/yyyyy.data"
+	remotePath := "/user/local/yyyyy.data"
 	//client.PutFile(localPath, remotePath)
 	fmt.Println("===============================================================")
 

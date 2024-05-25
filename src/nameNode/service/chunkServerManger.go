@@ -55,7 +55,7 @@ func (nn *NameNode) RegisterDataNode(arg *proto.DataNodeRegisterArg) (*proto.Dat
 			trashChunkNames:       make([]string, 0),
 		}
 		nn.dataNodeInfos[arg.DataNodeAddress] = dataNodeInfo
-		nn.DB.PutDataNodeMeta(DATALISTKEY, nn.dataNodeInfos)
+		// nn.DB.PutDataNodeMeta(DATALISTKEY, nn.dataNodeInfos)
 		fmt.Println("NameNode rev " + arg.DataNodeAddress + " register success...")
 	}
 	return &proto.DataNodeRegisterReply{Success: true}, nil
@@ -171,6 +171,10 @@ func (nn *NameNode) HandleNormalToReplicate(arg *proto.CommitChunkArg) error {
 		}
 	}
 	return nil
+}
+
+func (nn *NameNode) LiveDetection(*proto.LiveDetectionArg) (*proto.LiveDetectionReply, error) {
+	return &proto.LiveDetectionReply{Success: true}, nil
 }
 
 func (nn *NameNode) CheckHeartBeat() {

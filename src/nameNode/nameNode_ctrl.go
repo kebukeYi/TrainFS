@@ -53,6 +53,9 @@ func (s RpcServer) ChunkReport(con context.Context, arg *proto.FileLocationInfo)
 func (s RpcServer) CommitChunk(con context.Context, arg *proto.CommitChunkArg) (*proto.CommitChunkReply, error) {
 	return s.nameNode.CommitChunk(arg)
 }
+func (s RpcServer) LiveDetection(con context.Context, arg *proto.LiveDetectionArg) (*proto.LiveDetectionReply, error) {
+	return s.nameNode.LiveDetection(arg)
+}
 
 func main() {
 	newNameNode := service.NewNameNode()

@@ -31,14 +31,23 @@ func GetClientConfig() *ClientConfig {
 }
 
 func inits() {
-	fileName := "src/client/config/client_config.yml"
-	//fileName := "client_config.yml"
 	//fileName := "E:\\Projects\\GoLang-Projects\\TrainFS\\src\\client\\config\\client_config.yml"
-	file, err := os.ReadFile(fileName)
+	// 全部以 working directory 为 项目主目录!!!
+	//fileName := "./client_config.yml" // package 在同级目录
+	fileName := "./config/client_config.yml" // package 在上层目录
+	//fileName := "src/client/config/client_config.yml" // package 在上层目录
+	file, err := os.OpenFile(fileName, os.O_RDWR, 0777)
 	if err != nil {
 		log.Fatalf(" fail to read fileName: %s, err: %s ;\n", fileName, err)
 	}
-	err = yaml.Unmarshal(file, &conf)
+	v, err := file.Stat()
+	size := v.Size()
+	buf := make([]byte, size)
+	_, err = file.ReadAt(buf, 0)
+	if err != nil {
+		log.Fatal("fail to read yaml ", err)
+	}
+	err = yaml.Unmarshal(buf, &conf)
 	if err != nil {
 		log.Fatal("fail to yaml unmarshal:", err)
 	}

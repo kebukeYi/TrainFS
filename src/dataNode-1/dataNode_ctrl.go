@@ -40,10 +40,9 @@ func main() {
 	server := grpc.NewServer()
 	register, err := dataNode.Register()
 	if register {
-		go dataNode.ChunkReportTask()
-		go dataNode.HeartBeatTask()
-		go dataNode.DoTrashTask()
-		go dataNode.DoReplicaTask()
+		log.Println("register success")
+	} else {
+		log.Println("register fail")
 	}
 	proto.RegisterClientToDataServiceServer(server, rpcServer)
 	err = server.Serve(listen)

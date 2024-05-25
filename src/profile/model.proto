@@ -27,10 +27,20 @@ service DataToNameService{
   rpc HeartBeat(HeartBeatArg)returns (HeartBeatReply);
   rpc ChunkReport(FileLocationInfo)returns (ChunkReportReply);
   rpc CommitChunk(CommitChunkArg)returns (CommitChunkReply);
+  rpc LiveDetection(LiveDetectionArg)returns (LiveDetectionReply);
 }
 
 service DataToDataService{
   rpc PutChunk(stream FileDataStream)returns (FileLocationInfo);
+}
+
+message LiveDetectionArg{
+  string DataNodeAddress = 1;
+}
+
+message LiveDetectionReply{
+  bool success = 1;
+  string context = 2;
 }
 
 message ChunkReportReply{

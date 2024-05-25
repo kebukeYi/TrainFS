@@ -650,6 +650,7 @@ const (
 	DataToNameService_HeartBeat_FullMethodName        = "/DataToNameService/HeartBeat"
 	DataToNameService_ChunkReport_FullMethodName      = "/DataToNameService/ChunkReport"
 	DataToNameService_CommitChunk_FullMethodName      = "/DataToNameService/CommitChunk"
+	DataToNameService_LiveDetection_FullMethodName    = "/DataToNameService/LiveDetection"
 )
 
 // DataToNameServiceClient is the client API for DataToNameService service.
@@ -660,6 +661,7 @@ type DataToNameServiceClient interface {
 	HeartBeat(ctx context.Context, in *HeartBeatArg, opts ...grpc.CallOption) (*HeartBeatReply, error)
 	ChunkReport(ctx context.Context, in *FileLocationInfo, opts ...grpc.CallOption) (*ChunkReportReply, error)
 	CommitChunk(ctx context.Context, in *CommitChunkArg, opts ...grpc.CallOption) (*CommitChunkReply, error)
+	LiveDetection(ctx context.Context, in *LiveDetectionArg, opts ...grpc.CallOption) (*LiveDetectionReply, error)
 }
 
 type dataToNameServiceClient struct {
@@ -706,6 +708,15 @@ func (c *dataToNameServiceClient) CommitChunk(ctx context.Context, in *CommitChu
 	return out, nil
 }
 
+func (c *dataToNameServiceClient) LiveDetection(ctx context.Context, in *LiveDetectionArg, opts ...grpc.CallOption) (*LiveDetectionReply, error) {
+	out := new(LiveDetectionReply)
+	err := c.cc.Invoke(ctx, DataToNameService_LiveDetection_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DataToNameServiceServer is the server API for DataToNameService service.
 // All implementations must embed UnimplementedDataToNameServiceServer
 // for forward compatibility
@@ -714,6 +725,7 @@ type DataToNameServiceServer interface {
 	HeartBeat(context.Context, *HeartBeatArg) (*HeartBeatReply, error)
 	ChunkReport(context.Context, *FileLocationInfo) (*ChunkReportReply, error)
 	CommitChunk(context.Context, *CommitChunkArg) (*CommitChunkReply, error)
+	LiveDetection(context.Context, *LiveDetectionArg) (*LiveDetectionReply, error)
 	mustEmbedUnimplementedDataToNameServiceServer()
 }
 
@@ -732,6 +744,9 @@ func (UnimplementedDataToNameServiceServer) ChunkReport(context.Context, *FileLo
 }
 func (UnimplementedDataToNameServiceServer) CommitChunk(context.Context, *CommitChunkArg) (*CommitChunkReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CommitChunk not implemented")
+}
+func (UnimplementedDataToNameServiceServer) LiveDetection(context.Context, *LiveDetectionArg) (*LiveDetectionReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LiveDetection not implemented")
 }
 func (UnimplementedDataToNameServiceServer) mustEmbedUnimplementedDataToNameServiceServer() {}
 
@@ -818,6 +833,24 @@ func _DataToNameService_CommitChunk_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DataToNameService_LiveDetection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LiveDetectionArg)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataToNameServiceServer).LiveDetection(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataToNameService_LiveDetection_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataToNameServiceServer).LiveDetection(ctx, req.(*LiveDetectionArg))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DataToNameService_ServiceDesc is the grpc.ServiceDesc for DataToNameService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -840,6 +873,10 @@ var DataToNameService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CommitChunk",
 			Handler:    _DataToNameService_CommitChunk_Handler,
+		},
+		{
+			MethodName: "LiveDetection",
+			Handler:    _DataToNameService_LiveDetection_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

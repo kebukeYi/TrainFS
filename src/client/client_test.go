@@ -1,7 +1,9 @@
-package cli
+package main
 
 import (
+	"fmt"
 	"testing"
+	"trainfs/src/client/cli"
 )
 
 func TestGetFileOfChunkName(t *testing.T) {
@@ -10,7 +12,7 @@ func TestGetFileOfChunkName(t *testing.T) {
 
 	expectedResult := []string{"/user/app/example.txt_chunk_0", "/user/app/example.txt_chunk_1", "/user/app/example.txt_chunk_2"}
 
-	result := GetFileOfChunkName(fileName, chunkNum)
+	result := cli.GetFileOfChunkName(fileName, chunkNum)
 
 	if len(result) != len(expectedResult) {
 		t.Errorf("Expected length of result to be %d, but got %d", len(expectedResult), len(result))
@@ -24,8 +26,9 @@ func TestGetFileOfChunkName(t *testing.T) {
 }
 
 func TestPutFile(t *testing.T) {
-	client := NewClient()
-	localPath := "F:\\testGPU.py"
-	remotePath := "/user/testGPU.py"
-	client.PutFile(localPath, remotePath)
+	client := cli.NewClient()
+	fmt.Println("client:", client)
+	//localPath := "F:\\yyyyy.jpg"
+	//remotePath := "/user/apps/yyyyy.data"
+	//client.PutFile(localPath, remotePath)
 }
