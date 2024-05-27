@@ -34,19 +34,21 @@ func (c *Client) PutFile(localPath string, remotePath string) {
 	if err != nil {
 		log.Fatalf("not found localfile %s", localPath)
 	}
+	// 400 * 1024 => 400KB
+	chunkSize := c.conf.Client.NameNode.ChunkSize * 1024
 	var chunkNum int64
-	if int64(len(fileData))%c.conf.Client.NameNode.ChunkSize != 0 {
-		chunkNum = int64(len(fileData))/c.conf.Client.NameNode.ChunkSize + 1
+	if int64(len(fileData))%chunkSize != 0 {
+		chunkNum = int64(len(fileData))/chunkSize + 1
 	} else {
-		chunkNum = int64(len(fileData)) / c.conf.Client.NameNode.ChunkSize
+		chunkNum = int64(len(fileData)) / chunkSize
 	}
-	err = c.doWrite(remotePath, int64(len(fileData)), fileData, chunkNum)
+	err = c.doWrite(remotePath, int64(len(fileData)), fileData, chunkSize, chunkNum)
 	if err != nil {
 		fmt.Printf("doWrite file error: %v", err)
 	}
 }
 
-func (c *Client) doWrite(remotePath string, fileTotalSize int64, fileData []byte, chunkNum int64) error {
+func (c *Client) doWrite(remotePath string, fileTotalSize int64, fileData []byte, chunkSize int64, chunkNum int64) error {
 	fileOperationArg := &proto.FileOperationArg{
 		Operation:  proto.FileOperationArg_WRITE,
 		FileName:   remotePath, // /user/app/example.txt
@@ -61,7 +63,7 @@ func (c *Client) doWrite(remotePath string, fileTotalSize int64, fileData []byte
 		return err
 	}
 	address := dataServerChain.DataNodeAddress
-	fmt.Printf("len:%d; dataServerChain:%s;\n", len(address), address)
+	fmt.Printf("remotePath: %s; len:%d; dataServerChain:%s;\n", remotePath, len(address), address)
 	if int32(len(address)) < replicaNum {
 		fmt.Printf("len:%d ; dataServerChain:%s ; replicaNum:%d \n; ", len(address), address, replicaNum)
 		return common.ErrEnoughReplicaDataNodeServer
@@ -72,7 +74,7 @@ func (c *Client) doWrite(remotePath string, fileTotalSize int64, fileData []byte
 
 	fileLocationInfo := &proto.FileLocationInfo{}
 	// FilePathChunkName: /user/app/example.txt_chunk_3
-	chunkNames := GetFileOfChunkName(remotePath, int(chunkNum))
+	chunkNames := common.GetFileChunkNameOfNum(remotePath, int(chunkNum))
 	for i := 0; i < int(chunkNum); i++ {
 		var fileDataStream *proto.FileDataStream
 		chunkInfo := &proto.ChunkInfo{}
@@ -82,7 +84,7 @@ func (c *Client) doWrite(remotePath string, fileTotalSize int64, fileData []byte
 		fileLocationInfo.Chunks = append(fileLocationInfo.Chunks, chunkInfo)
 		if i == int(chunkNum)-1 {
 			fileDataStream = &proto.FileDataStream{
-				Data:              fileData[i*int(c.conf.Client.NameNode.ChunkSize):],
+				Data:              fileData[i*int(chunkSize):],
 				DataNodeChain:     lastNode,
 				FilePathChunkName: chunkNames[i],
 				FilePathName:      remotePath,
@@ -92,7 +94,7 @@ func (c *Client) doWrite(remotePath string, fileTotalSize int64, fileData []byte
 			}
 		} else {
 			fileDataStream = &proto.FileDataStream{
-				Data:              fileData[i*int(c.conf.Client.NameNode.ChunkSize) : (i+1)*int(c.conf.Client.NameNode.ChunkSize)],
+				Data:              fileData[i*int(chunkSize) : (i+1)*int(chunkSize)],
 				DataNodeChain:     lastNode,
 				FilePathChunkName: chunkNames[i],
 				FilePathName:      remotePath,
@@ -186,7 +188,7 @@ func (c *Client) GetFile(localPath string, remotePath string) (*os.File, error) 
 		return nil, err
 	}
 	buf := make([]byte, 0)
-	chunkNames := GetFileOfChunkName(remotePath, int(fileLocationInfo.ChunkNum))
+	chunkNames := common.GetFileChunkNameOfNum(remotePath, int(fileLocationInfo.ChunkNum))
 	sortChunkNames := make([]*proto.ChunkInfo, 0)
 	for _, chunkName := range chunkNames {
 		for _, chunkInfo := range fileLocationInfo.Chunks {
@@ -259,6 +261,19 @@ func (c *Client) ListDir(remotePath string) (*proto.DirMetaList, error) {
 	return metaList, nil
 }
 
+func (c *Client) Mkdir(remotePath string) error {
+	fileOperationArg := &proto.FileOperationArg{
+		Operation: proto.FileOperationArg_MKDIR,
+		FileName:  remotePath,
+	}
+	nameServiceClient := getNameNodeConnection(c.conf.Client.NameNode.Host)
+	_, err := nameServiceClient.Mkdir(context.Background(), fileOperationArg)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (c *Client) ReName(oldPath string, newPath string) (*proto.ReNameReply, error) {
 	fileOperationArg := &proto.FileOperationArg{
 		Operation:   proto.FileOperationArg_RENAME,
@@ -271,14 +286,6 @@ func (c *Client) ReName(oldPath string, newPath string) (*proto.ReNameReply, err
 		return nil, err
 	}
 	return nameReply, nil
-}
-
-func GetFileOfChunkName(fileName string, chunkNum int) []string {
-	result := make([]string, 0)
-	for i := 0; i < chunkNum; i++ {
-		result = append(result, fileName+"_chunk_"+strconv.Itoa(i))
-	}
-	return result
 }
 
 func getNameNodeConnection(nameNodeAddress string) proto.ClientToNameServiceClient {

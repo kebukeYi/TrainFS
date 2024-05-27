@@ -7,23 +7,23 @@ import (
 	"log"
 )
 
-type StateMachine struct {
+type DataStoreManger struct {
 	path string
 	db   *leveldb.DB
 }
 
-func OpenStateMachine(path string) *StateMachine {
+func OpenDataStoreManger(path string) *DataStoreManger {
 	db, err := leveldb.OpenFile(path, nil)
 	if err != nil {
 		log.Fatalln(" NameNode Open level.db file fail,", err)
 	}
-	return &StateMachine{
+	return &DataStoreManger{
 		db:   db,
 		path: path,
 	}
 }
 
-func (m *StateMachine) PutFileMeta(key string, value *FileMeta) error {
+func (m *DataStoreManger) PutFileMeta(key string, value *FileMeta) error {
 	data2Bytes := m.data2Bytes(value)
 	err := m.db.Put([]byte(key), data2Bytes, nil)
 	if err != nil {
@@ -33,7 +33,7 @@ func (m *StateMachine) PutFileMeta(key string, value *FileMeta) error {
 	return nil
 }
 
-func (m *StateMachine) GetFileMeta(key string) (*FileMeta, error) {
+func (m *DataStoreManger) GetFileMeta(key string) (*FileMeta, error) {
 	value, err := m.db.Get([]byte(key), nil)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
@@ -48,15 +48,18 @@ func (m *StateMachine) GetFileMeta(key string) (*FileMeta, error) {
 	return fileMeta, nil
 }
 
-func (m *StateMachine) Delete(key string) error {
+func (m *DataStoreManger) Delete(key string) error {
 	err := m.db.Delete([]byte(key), nil)
 	if err != nil {
+		if err == leveldb.ErrNotFound {
+			return nil
+		}
 		return err
 	}
 	return nil
 }
 
-func (m *StateMachine) PutDataNodeMeta(key string, value map[string]*DataNodeInfo) {
+func (m *DataStoreManger) PutDataNodeMeta(key string, value map[string]*DataNodeInfo) {
 	data2Bytes := m.data2Bytes(value)
 	err := m.db.Put([]byte(key), data2Bytes, nil)
 	if err != nil {
@@ -64,7 +67,7 @@ func (m *StateMachine) PutDataNodeMeta(key string, value map[string]*DataNodeInf
 	}
 }
 
-func (m StateMachine) GetDataNodeMetas(key string) (map[string]*DataNodeInfo, error) {
+func (m *DataStoreManger) GetDataNodeMetas(key string) (map[string]*DataNodeInfo, error) {
 	value, err := m.db.Get([]byte(key), nil)
 	if err != nil {
 		return nil, err
@@ -77,7 +80,7 @@ func (m StateMachine) GetDataNodeMetas(key string) (map[string]*DataNodeInfo, er
 
 }
 
-func (m *StateMachine) data2Bytes(data interface{}) []byte {
+func (m *DataStoreManger) data2Bytes(data interface{}) []byte {
 	var buf bytes.Buffer
 	encoder := gob.NewEncoder(&buf)
 	err := encoder.Encode(data)
@@ -87,7 +90,7 @@ func (m *StateMachine) data2Bytes(data interface{}) []byte {
 	return buf.Bytes()
 }
 
-func (m *StateMachine) bytes2FileMeta(data []byte) (*FileMeta, error) {
+func (m *DataStoreManger) bytes2FileMeta(data []byte) (*FileMeta, error) {
 	buffer := bytes.NewBuffer(data)
 	decoder := gob.NewDecoder(buffer)
 	var fileMeta *FileMeta
@@ -98,7 +101,7 @@ func (m *StateMachine) bytes2FileMeta(data []byte) (*FileMeta, error) {
 	return fileMeta, nil
 }
 
-func (m *StateMachine) bytes2DataMeta(data []byte) (map[string]*DataNodeInfo, error) {
+func (m *DataStoreManger) bytes2DataMeta(data []byte) (map[string]*DataNodeInfo, error) {
 	buffer := bytes.NewBuffer(data)
 	decoder := gob.NewDecoder(buffer)
 	var dataMeta map[string]*DataNodeInfo

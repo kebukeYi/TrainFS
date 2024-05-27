@@ -4,16 +4,16 @@ import (
 	"context"
 	"fmt"
 	"google.golang.org/grpc"
-	"log"
 	"sync"
+	"time"
 	"trainfs/src/dataNode-1/config"
 	proto "trainfs/src/profile"
 )
 
 const (
-	TRASHTASK_KEY string = "TRASHTASK_KEY"
-	REPLICAT_KEY  string = "REPLICAT_KEY"
-	CHUNKINFOSKEY string = "CHUNKINFOSKEY"
+	trashKey         string = "trashKey"
+	replicationKey   string = "replicationKey"
+	AllChunkInfosKey string = "AllChunkInfosKey"
 )
 
 type DataNode struct {
@@ -26,38 +26,49 @@ type DataNode struct {
 	taskStoreManger *StoreManger
 	metaStoreManger *StoreManger
 	allChunkInfos   map[string]*proto.ChunkInfo
-	ReplicaTask     []*Replication
-	ReplicaChain    chan []*Replication
-	TrashTask       []string
-	TrashChan       chan []string
+
+	ReplicaTask  []*Replication
+	ReplicaChain chan []*Replication
+
+	TrashTask []string
+	TrashChan chan []string
 }
 type Replication struct {
-	filePathName      string
-	filePathChunkName string
-	toAddress         string
+	FilePathName      string
+	FilePathChunkName string
+	ToAddress         string
 }
 
 func NewDataNode() *DataNode {
 	dataNode := &DataNode{}
 	dataNode.Config = config.GetDataNodeConfig()
-	// dataNode.FileBuffer = NewFileBuffer()
 	dataNode.dataStoreManger = OpenStoreManager(dataNode.Config.DataDir)
 	dataNode.taskStoreManger = OpenStoreManager(dataNode.Config.TaskDir)
 	dataNode.metaStoreManger = OpenStoreManager(dataNode.Config.MetaDir)
-	chunkInfos, err := dataNode.metaStoreManger.GetChunkInfos(CHUNKINFOSKEY)
+	chunkInfos, err := dataNode.metaStoreManger.GetChunkInfos(AllChunkInfosKey)
 	if err != nil {
-		fmt.Printf("NewDataNode() -> dataNode.metaStoreManger.GetChunkInfos(CHUNKINFOSKEY) err: %v \n", err)
+		fmt.Printf("NewDataNode.dataNode.metaStoreManger.GetChunkInfos(%s) err: %v \n", AllChunkInfosKey, err)
 		return nil
 	}
-	if chunkInfos != nil {
-		dataNode.allChunkInfos = chunkInfos
-	} else {
-		dataNode.allChunkInfos = make(map[string]*proto.ChunkInfo)
+	dataNode.allChunkInfos = chunkInfos
+
+	trashs, err := dataNode.taskStoreManger.GetTrashs(trashKey)
+	if err != nil {
+		fmt.Printf("NewDataNode.dataNode.metaStoreManger.GetTrashs(%s) err: %v \n", trashKey, err)
+		return nil
 	}
+	dataNode.TrashTask = trashs
+
+	replications, err := dataNode.taskStoreManger.GetReplications(replicationKey)
+	if err != nil {
+		fmt.Printf("NewDataNode.dataNode.metaStoreManger.GetReplications(%s) err: %v \n", replicationKey, err)
+		return nil
+	}
+	dataNode.ReplicaTask = replications
+
 	dataNode.name = "DataNode-" + dataNode.Config.DataNodeId
 	dataNode.ReplicaChain = make(chan []*Replication)
 	dataNode.TrashChan = make(chan []string)
-	fmt.Println("DataNode-" + dataNode.Config.DataNodeId + " is running...")
 	return dataNode
 }
 
@@ -67,13 +78,18 @@ func (dataNode *DataNode) GetChunk(arg *proto.FileOperationArg, stream proto.Cli
 	filePathChunkName := arg.GetFileName()
 	read, err := dataNode.Read(filePathChunkName)
 	if err != nil {
+		fmt.Printf("DataNode[%s]-%s read chunk %s fail. err:%s \n",
+			dataNode.Config.Host, dataNode.Config.DataNodeId, filePathChunkName, err)
 		return err
 	}
 	err = stream.Send(&proto.FileDataStream{Data: read})
 	if err != nil {
+		fmt.Printf("DataNode[%s]-%s send chunk %s fail. err:%s \n",
+			dataNode.Config.Host, dataNode.Config.DataNodeId, filePathChunkName, err)
 		return err
 	}
-	fmt.Println("DataNode-" + dataNode.Config.DataNodeId + " send file " + filePathChunkName)
+	fmt.Printf("DataNode[%s]-%s send chunk %s success.\n ",
+		dataNode.Config.Host, dataNode.Config.DataNodeId, filePathChunkName)
 	return nil
 }
 
@@ -81,57 +97,78 @@ func (dataNode *DataNode) PutChunk(stream proto.ClientToDataService_PutChunkServ
 	dataNode.mux.Lock()
 	defer dataNode.mux.Unlock()
 	// fileName: example.txt
-	// filePathName: /user/app/example.txt
-	// filePathChunkName: /user/app/example.txt_chunk_0  /user/app/example.txt_chunk_1
+	// FilePathName: /user/app/example.txt
+	// FilePathChunkName: /user/app/example.txt_chunk_0  /user/app/example.txt_chunk_1
 	var filePathChunkName string
 	var filePathName string
 	var dataNodeChain []string
 	fileDataStream, err := stream.Recv()
+	if err != nil {
+		fmt.Printf("DataNode[%s]-%s stream Recv from ip:%s, srcName:%s, fileChunkName:%s;error: %s \n",
+			dataNode.Config.Host, dataNode.Config.DataNodeId,
+			fileDataStream.Address, fileDataStream.SrcName, fileDataStream.FilePathChunkName, err)
+		return err
+	}
 	filePathChunkName = fileDataStream.FilePathChunkName
 	dataNodeChain = fileDataStream.DataNodeChain
 	filePathName = fileDataStream.FilePathName
 	chunkId := fileDataStream.ChunkId
-	buf := make([]byte, 0)
-	if err != nil {
-		log.Printf("DataNode stream.Recv() ip:%s, srcName:%s,  error: %s", fileDataStream.Address, fileDataStream.SrcName, err)
-		return err
+	if _, ok := dataNode.allChunkInfos[filePathChunkName]; ok {
+		fmt.Printf("DataNode[%s]-%s Put chunk %s already exists! \n", dataNode.Config.Host, dataNode.Config.DataNodeId, filePathChunkName)
+		return nil
 	}
+	buf := make([]byte, 0)
 	buf = append(buf, fileDataStream.Data...)
 	err = stream.SendAndClose(&proto.FileLocationInfo{})
 	if err != nil {
-		fmt.Printf("DataNode stream.SendAndClose() ip:%s, srcName:%s,  error: %s", fileDataStream.Address, fileDataStream.SrcName, err)
+		fmt.Printf("DataNode[%s]-%s stream.SendAndClose() to ip:%s, srcName:%s ;error: %s \n",
+			dataNode.Config.Host, dataNode.Config.DataNodeId,
+			fileDataStream.Address, fileDataStream.SrcName, err)
+		return err
 	}
 	go func() {
 		chunkInfo := &proto.ChunkInfo{
 			ChunkId:           chunkId,
+			ChunkSize:         int64(len(buf)),
 			FilePathName:      filePathName,
 			FilePathChunkName: filePathChunkName,
 			DataNodeAddress:   &proto.DataNodeChain{DataNodeAddress: []string{dataNode.Config.Host}},
 		}
 		dataNode.mux.Lock()
 		dataNode.allChunkInfos[filePathChunkName] = chunkInfo
-		err = dataNode.metaStoreManger.PutChunkInfos(CHUNKINFOSKEY, dataNode.allChunkInfos)
+		err = dataNode.metaStoreManger.PutChunkInfos(AllChunkInfosKey, dataNode.allChunkInfos)
 		if err != nil {
+			fmt.Printf("DataNode[%s]-%s metaStoreManger.PutChunkInfos(%s) ;error: %s \n",
+				dataNode.Config.Host, dataNode.Config.DataNodeId,
+				AllChunkInfosKey, err)
 			return
 		}
 		dataNode.mux.Unlock()
+
 		if err = dataNode.Write(filePathChunkName, buf); err != nil {
-			log.Printf("DataNode Write filePathChunkName:%s, error: %s", filePathChunkName, err)
+			fmt.Printf("DataNode[%s]-%s Write FilePathChunkName(%s);error: %s \n",
+				dataNode.Config.Host, dataNode.Config.DataNodeId,
+				filePathChunkName, err)
 			return
 		}
-		fmt.Printf("DataNode-%s receive file chunk:%s; len: %d ;\n", dataNode.Config.DataNodeId, filePathChunkName, len(buf))
+		fmt.Printf("DataNode[%s]-%s receive fileChunk(%s), from:%s, len:%d; error:%s \n",
+			dataNode.Config.Host, dataNode.Config.DataNodeId,
+			filePathChunkName, fileDataStream.SrcName+"-"+fileDataStream.Address, len(buf), err)
+
 		_, err = dataNode.CommitChunk(&proto.CommitChunkArg{
 			FileChunkName:   filePathChunkName,
 			FilePathName:    filePathName,
 			FileSize:        int64(len(buf)),
 			Operation:       fileDataStream.Operation,
 			ChunkId:         chunkId,
+			SrcAddress:      dataNode.Config.Host,
 			DataNodeAddress: []string{dataNode.Config.Host},
 		})
 		if err != nil {
 			// todo 需要重试
-			log.Println(err)
-			log.Printf("DataNode Write fileChunkName:%s, error: %s", filePathChunkName, err)
+			fmt.Printf("DataNode[%s]-%s CommitChunk file chunk(%s), len:%d ; error: %s \n",
+				dataNode.Config.Host, dataNode.Config.DataNodeId,
+				filePathChunkName, len(buf), err)
 		}
 	}()
 
@@ -140,10 +177,14 @@ func (dataNode *DataNode) PutChunk(stream proto.ClientToDataService_PutChunkServ
 		dataServiceClient, err := dataNode.getGrpcDataServerConn(nextNodeServer)
 		putChunkClient, err := dataServiceClient.PutChunk(context.Background())
 		if err != nil {
+			fmt.Printf("DataNode[%s]-%s dataNode.getGrpcDataServerConn(%s) ;error: %s \n",
+				dataNode.Config.Host, dataNode.Config.DataNodeId,
+				nextNodeServer, err)
 			return err
 		}
 		err = putChunkClient.Send(&proto.FileDataStream{
 			FilePathChunkName: filePathChunkName,
+			FilePathName:      filePathName,
 			ChunkId:           chunkId,
 			Data:              buf,
 			DataNodeChain:     dataNodeChain[1:],
@@ -151,25 +192,35 @@ func (dataNode *DataNode) PutChunk(stream proto.ClientToDataService_PutChunkServ
 			SrcName:           dataNode.name,
 			Operation:         proto.ChunkReplicateStatus_NormalToReplicate,
 		})
-		fmt.Println("DataNode-" + dataNode.Config.DataNodeId + " forward file chunk  " + filePathChunkName + " to " + nextNodeServer)
+		defer putChunkClient.CloseSend()
 		if err != nil {
-			// todo 需要重试发送
-			log.Printf("DataNode send to dataNode-1:%s, error: %s", nextNodeServer, err)
+			fmt.Printf("DataNode[%s]-%s putChunkClient.Send(%s) to ip:%s, srcName:%s ;error: %s \n",
+				dataNode.Config.Host, dataNode.Config.DataNodeId, filePathChunkName,
+				fileDataStream.Address, fileDataStream.SrcName, err)
 			return err
 		}
+		fmt.Printf("DataNode[%s]-%s forward fileChunk %s to ip:%s, srcName:%s; error: %s \n",
+			dataNode.Config.Host, dataNode.Config.DataNodeId, filePathChunkName,
+			nextNodeServer, fileDataStream.SrcName, err)
 	}
 	return nil
 }
 
 func (dataNode *DataNode) CommitChunk(arg *proto.CommitChunkArg) (*proto.CommitChunkReply, error) {
-	dataNode.mux.Lock()
-	defer dataNode.mux.Unlock()
+	//dataNode.mux.Lock()
+	//defer dataNode.mux.Unlock()
 	nameServiceClient, err := dataNode.getGrpcNameNodeServerConn(dataNode.Config.NameNodeHost)
 	if err != nil {
-		return nil, nil
+		fmt.Printf("DataNode[%s]-%s dataNode.getGrpcNameNodeServerConn(%s) ;error: %s \n",
+			dataNode.Config.Host, dataNode.Config.DataNodeId,
+			dataNode.Config.NameNodeHost, err)
+		return nil, err
 	}
 	reply, err := nameServiceClient.CommitChunk(context.Background(), arg)
-	fmt.Printf("DataNode-%s commit file chunk %v ;\n", dataNode.Config.DataNodeId, arg)
+	fmt.Printf("DataNode[%s]-%s CommitChunk fileChunk(%s),type:%s, len:%d ; error: %s \n",
+		dataNode.Config.Host, dataNode.Config.DataNodeId,
+		arg.Operation,
+		arg.FileChunkName, arg.FileSize, err)
 	return reply, err
 }
 
@@ -181,6 +232,7 @@ func (dataNode *DataNode) GetDataNodeInfo(arg *proto.FileOperationArg) (*proto.F
 		chunkInfos = append(chunkInfos, chunkInfo)
 	}
 	chunk := &proto.FileLocationInfo{Chunks: chunkInfos, DataNodeAddress: dataNode.Config.Host}
+
 	return chunk, nil
 }
 
@@ -202,10 +254,23 @@ func (dataNode *DataNode) getGrpcDataServerConn(address string) (proto.ClientToD
 }
 
 func (dataNode *DataNode) getGrpcNameNodeServerConn(address string) (proto.DataToNameServiceClient, error) {
-	clientConn, err := grpc.Dial(address, grpc.WithInsecure())
+	withTimeout, _ := context.WithTimeout(context.Background(), time.Duration(5000*10)*time.Millisecond)
+	clientConn, err := grpc.DialContext(withTimeout, address, grpc.WithInsecure())
 	if err != nil {
 		return nil, err
 	}
 	toNameNodeServiceClient := proto.NewDataToNameServiceClient(clientConn)
 	return toNameNodeServiceClient, nil
+}
+
+func (dataNode *DataNode) CheckTask() {
+	if len(dataNode.TrashTask) > 0 {
+		fmt.Printf("DataNode[%s]-%s TrashTask:%v; strat...\n", dataNode.Config.Host, dataNode.Config.DataNodeId, dataNode.TrashTask)
+		go dataNode.Trash(dataNode.TrashTask)
+	}
+	time.Sleep(time.Second * 3)
+	if len(dataNode.ReplicaTask) > 0 {
+		fmt.Printf("DataNode[%s]-%s ReplicaTask:%v; strat...\n", dataNode.Config.Host, dataNode.Config.DataNodeId, dataNode.ReplicaTask)
+		go dataNode.Replica(dataNode.ReplicaTask)
+	}
 }

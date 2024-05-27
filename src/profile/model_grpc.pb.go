@@ -27,6 +27,7 @@ const (
 	ClientToNameService_DeleteFile_FullMethodName        = "/ClientToNameService/DeleteFile"
 	ClientToNameService_ListDir_FullMethodName           = "/ClientToNameService/ListDir"
 	ClientToNameService_ReName_FullMethodName            = "/ClientToNameService/ReName"
+	ClientToNameService_Mkdir_FullMethodName             = "/ClientToNameService/Mkdir"
 )
 
 // ClientToNameServiceClient is the client API for ClientToNameService service.
@@ -41,6 +42,7 @@ type ClientToNameServiceClient interface {
 	DeleteFile(ctx context.Context, in *FileOperationArg, opts ...grpc.CallOption) (*DeleteFileReply, error)
 	ListDir(ctx context.Context, in *FileOperationArg, opts ...grpc.CallOption) (*DirMetaList, error)
 	ReName(ctx context.Context, in *FileOperationArg, opts ...grpc.CallOption) (*ReNameReply, error)
+	Mkdir(ctx context.Context, in *FileOperationArg, opts ...grpc.CallOption) (*MkdirReply, error)
 }
 
 type clientToNameServiceClient struct {
@@ -123,6 +125,15 @@ func (c *clientToNameServiceClient) ReName(ctx context.Context, in *FileOperatio
 	return out, nil
 }
 
+func (c *clientToNameServiceClient) Mkdir(ctx context.Context, in *FileOperationArg, opts ...grpc.CallOption) (*MkdirReply, error) {
+	out := new(MkdirReply)
+	err := c.cc.Invoke(ctx, ClientToNameService_Mkdir_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ClientToNameServiceServer is the server API for ClientToNameService service.
 // All implementations must embed UnimplementedClientToNameServiceServer
 // for forward compatibility
@@ -135,6 +146,7 @@ type ClientToNameServiceServer interface {
 	DeleteFile(context.Context, *FileOperationArg) (*DeleteFileReply, error)
 	ListDir(context.Context, *FileOperationArg) (*DirMetaList, error)
 	ReName(context.Context, *FileOperationArg) (*ReNameReply, error)
+	Mkdir(context.Context, *FileOperationArg) (*MkdirReply, error)
 	mustEmbedUnimplementedClientToNameServiceServer()
 }
 
@@ -165,6 +177,9 @@ func (UnimplementedClientToNameServiceServer) ListDir(context.Context, *FileOper
 }
 func (UnimplementedClientToNameServiceServer) ReName(context.Context, *FileOperationArg) (*ReNameReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReName not implemented")
+}
+func (UnimplementedClientToNameServiceServer) Mkdir(context.Context, *FileOperationArg) (*MkdirReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Mkdir not implemented")
 }
 func (UnimplementedClientToNameServiceServer) mustEmbedUnimplementedClientToNameServiceServer() {}
 
@@ -323,6 +338,24 @@ func _ClientToNameService_ReName_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ClientToNameService_Mkdir_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FileOperationArg)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientToNameServiceServer).Mkdir(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientToNameService_Mkdir_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientToNameServiceServer).Mkdir(ctx, req.(*FileOperationArg))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ClientToNameService_ServiceDesc is the grpc.ServiceDesc for ClientToNameService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -361,6 +394,10 @@ var ClientToNameService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReName",
 			Handler:    _ClientToNameService_ReName_Handler,
+		},
+		{
+			MethodName: "Mkdir",
+			Handler:    _ClientToNameService_Mkdir_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

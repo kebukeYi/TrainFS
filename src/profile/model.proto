@@ -11,6 +11,7 @@ service ClientToNameService{
   rpc DeleteFile(FileOperationArg)returns (DeleteFileReply);
   rpc ListDir(FileOperationArg)returns (DirMetaList);
   rpc ReName(FileOperationArg) returns (ReNameReply);
+  rpc Mkdir(FileOperationArg) returns (MkdirReply);
 }
 
 service ClientToDataService{
@@ -52,6 +53,11 @@ message ReNameReply {
   string context = 2;
 }
 
+message MkdirReply{
+  bool success = 1;
+  string context = 2;
+}
+
 message DeleteFileReply{
   bool success = 1;
   string context = 2;
@@ -89,6 +95,7 @@ message CheckCommitChunkReply{
 enum ChunkReplicateStatus {
   LostToReplicate = 0;
   NormalToReplicate = 1;
+  DeleteFileChunk = 2;
 }
 
 message CommitChunkArg{
@@ -97,7 +104,8 @@ message CommitChunkArg{
   ChunkReplicateStatus operation = 3;
   int64 fileSize = 4;
   int32 chunkId = 5;
-  repeated string DataNodeAddress = 6;
+  string srcAddress = 6;
+  repeated string DataNodeAddress = 7;
 }
 message CommitChunkReply{
   bool success = 1;
@@ -133,10 +141,11 @@ message FileLocationInfo{
 }
 
 message ChunkInfo{
-  int32 chunkId = 1;
-  string filePathName = 2;
-  string filePathChunkName = 3;
-  DataNodeChain dataNodeAddress = 4;
+  int64 chunkSize = 1;
+  int32 chunkId = 2;
+  string filePathName = 3;
+  string filePathChunkName = 4;
+  DataNodeChain dataNodeAddress = 5;
 }
 
 message DataNodeChain{

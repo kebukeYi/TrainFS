@@ -25,29 +25,6 @@ func OpenStoreManager(path string) *StoreManger {
 	}
 }
 
-func (m *StoreManger) PutReplications(key string, value []*Replication) error {
-	data, err := replications2bytes(value)
-	if data != nil {
-		err := m.db.Put([]byte(key), data, nil)
-		if err != nil {
-			return err
-		}
-	}
-	return err
-}
-
-func (m *StoreManger) GetReplications(key string) ([]*Replication, error) {
-	data, err := m.db.Get([]byte(key), nil)
-	if err != nil {
-		return nil, err
-	}
-	m2, err := bytes2Replications(data)
-	if m2 != nil {
-		return m2, nil
-	}
-	return nil, err
-}
-
 func (m *StoreManger) PutChunkInfos(key string, value map[string]*proto.ChunkInfo) error {
 	data, err := chunkInfos2bytes(value)
 	if data != nil {
@@ -63,34 +40,11 @@ func (m *StoreManger) GetChunkInfos(key string) (map[string]*proto.ChunkInfo, er
 	value, err := m.db.Get([]byte(key), nil)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
-			return nil, nil
+			return make(map[string]*proto.ChunkInfo), nil
 		}
 		return nil, err
 	}
 	m2, err := bytes2ChunkInfos(value)
-	if m2 != nil {
-		return m2, nil
-	}
-	return nil, err
-}
-
-func (m *StoreManger) PutTrashs(key string, value []string) error {
-	data, err := strings2bytes(value)
-	if data != nil {
-		err := m.db.Put([]byte(key), data, nil)
-		if err != nil {
-			return err
-		}
-	}
-	return err
-}
-
-func (m *StoreManger) GetPutTrashs(key string) ([]string, error) {
-	value, err := m.db.Get([]byte(key), nil)
-	if err != nil {
-		return nil, err
-	}
-	m2, err := bytes2Strings(value)
 	if m2 != nil {
 		return m2, nil
 	}
@@ -116,9 +70,64 @@ func (m *StoreManger) Get(key string) ([]byte, error) {
 func (m *StoreManger) Delete(key string) error {
 	err := m.db.Delete([]byte(key), nil)
 	if err != nil {
+		if err == leveldb.ErrNotFound {
+			return nil
+		}
 		return err
 	}
 	return nil
+}
+
+func (m *StoreManger) PutReplications(key string, value []*Replication) error {
+	data, err := replications2bytes(value)
+	if data != nil {
+		err = m.db.Put([]byte(key), data, nil)
+		if err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+func (m *StoreManger) GetReplications(key string) ([]*Replication, error) {
+	data, err := m.db.Get([]byte(key), nil)
+	if err != nil {
+		if err == leveldb.ErrNotFound {
+			return make([]*Replication, 0), nil
+		}
+		return nil, err
+	}
+	m2, err := bytes2Replications(data)
+	if m2 != nil {
+		return m2, nil
+	}
+	return nil, err
+}
+
+func (m *StoreManger) PutTrashs(key string, value []string) error {
+	data, err := strings2bytes(value)
+	if data != nil {
+		err := m.db.Put([]byte(key), data, nil)
+		if err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+func (m *StoreManger) GetTrashs(key string) ([]string, error) {
+	value, err := m.db.Get([]byte(key), nil)
+	if err != nil {
+		if err == leveldb.ErrNotFound {
+			return make([]string, 0), nil
+		}
+		return nil, err
+	}
+	m2, err := bytes2Strings(value)
+	if m2 != nil {
+		return m2, nil
+	}
+	return nil, err
 }
 
 func bytes2Replications(value []byte) ([]*Replication, error) {
@@ -144,7 +153,7 @@ func replications2bytes(value []*Replication) ([]byte, error) {
 	encoder := gob.NewEncoder(buf)
 	err := encoder.Encode(value)
 	if err != nil {
-		fmt.Printf("replications2bytes[%s] encode error:%s \n", value, err)
+		fmt.Printf("replications2bytes[%v] encode error:%s \n", value, err)
 		return nil, err
 	}
 	return buff, nil

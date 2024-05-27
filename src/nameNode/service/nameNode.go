@@ -12,13 +12,14 @@ import (
 )
 
 type NameNode struct {
-	Config *config.NameNodeConfig
-	mux    sync.RWMutex
-	DB     *StateMachine
+	Config    *config.NameNodeConfig
+	mux       sync.RWMutex
+	dataStore *DataStoreManger
+	taskStore *TaskStoreManger
 
 	// <fileName1, [chunk1,chunk2,chunk3]>
 	// <fileName2, [chunk4,chunk5,chunk6]>
-	// fileChunks map[string][]string
+	// fileChunks map[string][]stringtaskStore
 
 	// <chunk1, [dataNode1,dataNode2,dataNode3]>
 	// <chunk2, [dataNode2,dataNode3,dataNode4]>
@@ -35,8 +36,8 @@ type NameNode struct {
 func NewNameNode() *NameNode {
 	nameNode := &NameNode{}
 	nameNode.Config = config.GetDataNodeConfig()
-	db := OpenStateMachine(nameNode.Config.NameNode.DataDir)
-	nameNode.DB = db
+	nameNode.dataStore = OpenDataStoreManger(nameNode.Config.NameNode.DataDir)
+	nameNode.taskStore = OpenTaskStoreManger(nameNode.Config.NameNode.MetaDir)
 	nameNode.chunkLocation = make(map[string][]*ReplicaMeta)
 	nameNode.dataNodeChunks = make(map[string][]*ChunkMeta)
 	nameNode.dataNodeInfos = make(map[string]*DataNodeInfo)
@@ -68,11 +69,11 @@ func (nn *NameNode) PutFile(arg *proto.FileOperationArg) (*proto.DataNodeChain, 
 	parentNode.ChildList[fileName] = fileMeta
 	// todo 等待DataNode commitChunk 后再持久化
 	// todo 不等待DataNode commitChunk 后再持久化,先持久化
-	err = nn.DB.PutFileMeta(fileMeta.KeyFileName, fileMeta)
+	err = nn.dataStore.PutFileMeta(fileMeta.KeyFileName, fileMeta)
 	if err != nil {
 		return nil, err
 	}
-	err = nn.DB.PutFileMeta(parentNode.KeyFileName, parentNode)
+	err = nn.dataStore.PutFileMeta(parentNode.KeyFileName, parentNode)
 	if err != nil {
 		return nil, err
 	}
@@ -118,22 +119,32 @@ func (nn *NameNode) GetFileLocation(filePath string, replicaNum int32) (*proto.F
 	}
 	nn.mux.RLock()
 	defer nn.mux.RUnlock()
-	fileMeta, err := nn.DB.GetFileMeta(filePath)
+	fileMeta, err := nn.dataStore.GetFileMeta(filePath)
 	if err != nil {
 		fmt.Printf("NameNode rev GetFile(%s), err:%v;\n", filePath, err)
 		return nil, err
 	}
-	fmt.Printf("NameNode rev GetFile(%s), db FileLocationInfo:%v;\n", filePath, fileMeta.Chunks)
-	fmt.Printf("NameNode  nn.chunkLocation: %v; \n", nn.chunkLocation)
+	if fileMeta == nil {
+		return nil, common.ErrFileNotFound
+	}
+	if fileMeta.IsDir {
+		return nil, common.ErrFileFormatError
+	}
+	fmt.Printf("NameNode rev GetFile(%s), dataStore.FileLocationInfo:%v;\n", filePath, fileMeta.Chunks)
+	fmt.Printf("NameNode  nn.chunkLocations: %v; \n", nn.chunkLocation)
 	fileLocationInfo := &proto.FileLocationInfo{}
 	fileLocationInfo.FileSize = fileMeta.FileSize
 	fileLocationInfo.ChunkNum = int64(len(fileMeta.Chunks))
 	chunkInfos := make([]*proto.ChunkInfo, 0)
 	for _, chunkMeta := range fileMeta.Chunks {
-		if r, ok := nn.chunkLocation[chunkMeta.ChunkName]; ok {
+		if dataNodes, ok := nn.chunkLocation[chunkMeta.ChunkName]; ok {
 			address := make([]string, 0)
-			for _, replica := range r {
-				address = append(address, replica.DataNodeAddress)
+			for _, dataNode := range dataNodes {
+				if nodeInfo, ok := nn.dataNodeInfos[dataNode.DataNodeAddress]; ok {
+					if nodeInfo.Status == datanodeUp {
+						address = append(address, dataNode.DataNodeAddress)
+					}
+				}
 			}
 			chunkInfos = append(chunkInfos, &proto.ChunkInfo{
 				ChunkId:           chunkMeta.ChunkId,
@@ -166,13 +177,13 @@ func (nn *NameNode) GetFileStoreChain(arg *proto.FileOperationArg) (*proto.DataN
 func (nn *NameNode) DeleteFile(arg *proto.FileOperationArg) (*proto.DeleteFileReply, error) {
 	nn.mux.Lock()
 	defer nn.mux.Unlock()
-	fileName := arg.GetFileName()
-	if fileName == "/" {
+	pathFileName := arg.FileName
+	if pathFileName == "/" {
 		return nil, common.ErrCanNotChangeRootDir
 	}
 	// /root   / root
 	// /tt.txt / ttt.txt
-	fileName, path := splitFileNamePath(arg.FileName)
+	fileName, path := splitFileNamePath(pathFileName)
 	parentNode, err := nn.checkPathOrCreate(path, false)
 	if err != nil {
 		return nil, err
@@ -181,35 +192,50 @@ func (nn *NameNode) DeleteFile(arg *proto.FileOperationArg) (*proto.DeleteFileRe
 	if meta == nil {
 		return nil, common.ErrFileNotFound
 	}
+	// 空目录
 	delete(parentNode.ChildList, fileName)
-	nn.DB.PutFileMeta(parentNode.KeyFileName, parentNode)
-	fileMeta, err := nn.DB.GetFileMeta(fileName)
-	if err != nil {
-		return nil, err
-	}
-	if fileMeta.IsDir {
-		err = nn.DB.Delete(fileName)
-		return nil, err
+	nn.dataStore.PutFileMeta(parentNode.KeyFileName, parentNode)
+	if meta.IsDir {
+		getFile, err := nn.dataStore.GetFileMeta(meta.KeyFileName)
+		if err != nil {
+			return nil, err
+		}
+		if len(getFile.ChildList) > 0 {
+			return nil, common.ErrCanNotDelNotEmptyDir
+		} else {
+			err = nn.dataStore.Delete(meta.KeyFileName)
+		}
 	} else {
-		for _, chunk := range fileMeta.Chunks {
+		meta, err = nn.dataStore.GetFileMeta(meta.KeyFileName) // 获取最新的 dataNode 的上传信息
+		for _, chunk := range meta.Chunks {
 			replicaMetas := nn.chunkLocation[chunk.ChunkName]
 			for _, replicaMeta := range replicaMetas {
 				nodeInfo := nn.dataNodeInfos[replicaMeta.DataNodeAddress]
 				nodeInfo.trashChunkNames = append(nodeInfo.trashChunkNames, chunk.ChunkName)
-				fmt.Printf("NameNode delete chunk:%s, replica:%s ;\n",
-					chunk.ChunkName, replicaMeta.DataNodeAddress)
+				nodeTrashKey := GetDataNodeTrashKey(nodeInfo.Address)
+				err = nn.taskStore.PutTrashs(nodeTrashKey, nodeInfo.trashChunkNames)
+				if err != nil {
+					fmt.Printf("NameNode delete chunk:%s, replicaIP:%s err:%v ;\n", chunk.ChunkName, replicaMeta.DataNodeAddress, err)
+				}
+				fmt.Printf("NameNode delete chunk:%s, replica:%s ;\n", chunk.ChunkName, replicaMeta.DataNodeAddress)
 			}
+			delete(nn.chunkLocation, chunk.ChunkName)
+		}
+		err = nn.dataStore.Delete(meta.KeyFileName)
+		fmt.Printf("NameNode dataStore.Delete(%s);\n", meta.KeyFileName)
+		if err != nil {
+			fmt.Printf("NameNode dataStore.Delete(%s), err:%v ;\n", meta.KeyFileName, err)
 		}
 	}
-	fmt.Printf("NameNode rev DeleteFile(%s);\n", fileName)
-	return nil, nil
+	fmt.Printf("NameNode rev DeleteFile(%s);\n", pathFileName)
+	return nil, err
 }
 
 func (nn *NameNode) ListDir(arg *proto.FileOperationArg) (*proto.DirMetaList, error) {
 	nn.mux.Lock()
 	defer nn.mux.Unlock()
 	fileName := arg.GetFileName()
-	fileMeta, err := nn.DB.GetFileMeta(fileName)
+	fileMeta, err := nn.dataStore.GetFileMeta(fileName)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +247,7 @@ func (nn *NameNode) ListDir(arg *proto.FileOperationArg) (*proto.DirMetaList, er
 		return nil, common.ErrNotDir
 	}
 	childList := fileMeta.ChildList
-	dirList := make([]*proto.FileMeta, len(childList))
+	dirList := make([]*proto.FileMeta, 0)
 	for _, meta := range childList {
 		dirList = append(dirList, &proto.FileMeta{
 			KeyFileName: meta.KeyFileName,
@@ -231,7 +257,44 @@ func (nn *NameNode) ListDir(arg *proto.FileOperationArg) (*proto.DirMetaList, er
 		})
 	}
 	dirMetaList := &proto.DirMetaList{MetaList: dirList}
+	fmt.Printf("NameNode rev ListDir(%s), return DirMetaList:%v;\n", fileName, dirMetaList)
 	return dirMetaList, nil
+}
+
+func (nn *NameNode) Mkdir(arg *proto.FileOperationArg) (*proto.MkdirReply, error) {
+	nn.mux.Lock()
+	defer nn.mux.Unlock()
+	// arg.GetFileName() : fileName: /user/app/example.txt
+	// path: [user,app]
+	// fileName: example.txt
+	pathFileName := arg.GetFileName()
+	fileName, path := splitFileNamePath(pathFileName)
+	parentNode, err := nn.checkPathOrCreate(path, true)
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := parentNode.ChildList[fileName]; ok {
+		return nil, common.ErrDirAlreadyExists
+	}
+	fileMeta := &FileMeta{
+		FileName:    fileName,                                           // example.txt
+		KeyFileName: CreatKeyFileName(parentNode.KeyFileName, fileName), // /user/app/example.txt
+		FileSize:    arg.GetFileSize(),
+		IsDir:       true,
+		ChildList:   make(map[string]*FileMeta),
+	}
+	parentNode.ChildList[fileName] = fileMeta
+	// todo 等待DataNode commitChunk 后再持久化
+	// todo 不等待DataNode commitChunk 后再持久化,先持久化
+	err = nn.dataStore.PutFileMeta(fileMeta.KeyFileName, fileMeta)
+	if err != nil {
+		return nil, err
+	}
+	err = nn.dataStore.PutFileMeta(parentNode.KeyFileName, parentNode)
+	if err != nil {
+		return nil, err
+	}
+	return &proto.MkdirReply{Success: true}, nil
 }
 
 func (nn *NameNode) ReName(arg *proto.FileOperationArg) (*proto.ReNameReply, error) {
@@ -239,7 +302,7 @@ func (nn *NameNode) ReName(arg *proto.FileOperationArg) (*proto.ReNameReply, err
 	defer nn.mux.Unlock()
 	oldKeyFilePathName := arg.GetFileName()
 	newKeyFilePathName := arg.GetNewFileName()
-	fileMeta, err := nn.DB.GetFileMeta(oldKeyFilePathName)
+	fileMeta, err := nn.dataStore.GetFileMeta(oldKeyFilePathName)
 	if err != nil {
 		return nil, err
 	}
@@ -256,11 +319,11 @@ func (nn *NameNode) ReName(arg *proto.FileOperationArg) (*proto.ReNameReply, err
 	fileMeta.KeyFileName = newKeyFilePathName
 	parentNode.ChildList[newFileName] = fileMeta
 	delete(parentNode.ChildList, oldFileName)
-	err = nn.DB.PutFileMeta(parentNode.KeyFileName, parentNode)
+	err = nn.dataStore.PutFileMeta(parentNode.KeyFileName, parentNode)
 	if err != nil {
 		return nil, err
 	}
-	err = nn.DB.PutFileMeta(fileMeta.KeyFileName, fileMeta)
+	err = nn.dataStore.PutFileMeta(fileMeta.KeyFileName, fileMeta)
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +335,7 @@ func (nn *NameNode) ReName(arg *proto.FileOperationArg) (*proto.ReNameReply, err
 // path: /user/test          /user/app            /user/app/local/yy  /   /root
 func (nn *NameNode) checkPathOrCreate(path string, notCreate bool) (*FileMeta, error) {
 	if path == "/" {
-		fileMeta, err := nn.DB.GetFileMeta(path)
+		fileMeta, err := nn.dataStore.GetFileMeta(path)
 		if err == leveldb.ErrNotFound && notCreate {
 			fileMeta := &FileMeta{
 				IsDir:       true,
@@ -281,14 +344,14 @@ func (nn *NameNode) checkPathOrCreate(path string, notCreate bool) (*FileMeta, e
 				FileName:    path,
 				FileSize:    0,
 			}
-			err = nn.DB.PutFileMeta(path, fileMeta)
+			err = nn.dataStore.PutFileMeta(path, fileMeta)
 			if err != nil {
 				return nil, err
 			}
 		}
 		return fileMeta, err
 	}
-	rootFileMeta, _ := nn.DB.GetFileMeta("/")
+	rootFileMeta, _ := nn.dataStore.GetFileMeta("/")
 	if rootFileMeta == nil {
 		rootFileMeta = &FileMeta{
 			IsDir:       true,
@@ -297,13 +360,15 @@ func (nn *NameNode) checkPathOrCreate(path string, notCreate bool) (*FileMeta, e
 			FileName:    "/",
 			FileSize:    0,
 		}
-		if err := nn.DB.PutFileMeta(rootFileMeta.KeyFileName, rootFileMeta); err != nil {
+		if err := nn.dataStore.PutFileMeta(rootFileMeta.KeyFileName, rootFileMeta); err != nil {
 			return nil, err
 		}
 	}
+	fileQueue := make([]*FileMeta, 0)
+	fileQueue = append(fileQueue, rootFileMeta)
 	split := strings.Split(path, "/")[1:]
 	for i := 0; i < len(split); i++ {
-		dir := split[i] // app
+		dir := split[i] // user
 		file, ok := rootFileMeta.ChildList[dir]
 		if !ok {
 			if notCreate {
@@ -315,16 +380,25 @@ func (nn *NameNode) checkPathOrCreate(path string, notCreate bool) (*FileMeta, e
 					FileSize:    0,
 				}
 				// KeyFileName: /app  value: app
-				nn.DB.PutFileMeta(fileMeta.KeyFileName, fileMeta)
+				nn.dataStore.PutFileMeta(fileMeta.KeyFileName, fileMeta)
 				rootFileMeta.ChildList[dir] = fileMeta
-				nn.DB.PutFileMeta(rootFileMeta.KeyFileName, rootFileMeta)
+				fileQueue = append(fileQueue, fileMeta)
+				nn.dataStore.PutFileMeta(rootFileMeta.KeyFileName, rootFileMeta)
 				rootFileMeta = fileMeta
 				continue
 			}
 			return nil, common.ErrNotDir
 		}
-		rootFileMeta = file
+		fileMeta, err := nn.dataStore.GetFileMeta(file.KeyFileName)
+		if err != nil {
+			return nil, err
+		}
+		fileQueue = append(fileQueue, fileMeta)
+		rootFileMeta = fileMeta
 	}
+	//for _, meta := range fileQueue {
+	//	fmt.Printf("fileQueue: %v; \n", meta)
+	//}
 	return rootFileMeta, nil
 }
 
@@ -339,7 +413,7 @@ func (nn *NameNode) choseDataNode(num int) ([]*DataNodeInfo, error) {
 		}
 	}
 	if num > len(result) {
-		return nil, common.ErrEnoughReplicaDataNodeServer
+		return nil, common.ErrEnoughUpDataNodeServer
 	}
 	sort.Sort(ByFreeSpace(result))
 	return result[:num], nil

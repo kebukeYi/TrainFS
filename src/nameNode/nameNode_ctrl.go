@@ -6,6 +6,7 @@ import (
 	"google.golang.org/grpc"
 	"log"
 	"net"
+	"trainfs/src/common"
 	"trainfs/src/nameNode/service"
 	proto "trainfs/src/profile"
 )
@@ -38,7 +39,12 @@ func (s RpcServer) ListDir(con context.Context, arg *proto.FileOperationArg) (*p
 	return s.nameNode.ListDir(arg)
 }
 func (s RpcServer) ReName(con context.Context, arg *proto.FileOperationArg) (*proto.ReNameReply, error) {
-	return s.nameNode.ReName(arg)
+	//return s.nameNode.ReName(arg)
+	return nil, common.ErrNotSupported
+}
+
+func (s RpcServer) Mkdir(con context.Context, arg *proto.FileOperationArg) (*proto.MkdirReply, error) {
+	return s.nameNode.Mkdir(arg)
 }
 
 func (s RpcServer) RegisterDataNode(con context.Context, arg *proto.DataNodeRegisterArg) (*proto.DataNodeRegisterReply, error) {

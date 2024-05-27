@@ -14,15 +14,16 @@ type NameNodeConfig struct {
 }
 
 type NameNode struct {
-	Host                      string   `yaml:"Host"`
-	NameNodeId                string   `yaml:"NameNodeId"`
-	DataNodeHeartBeatInterval int      `yaml:"DataNodeHeartBeatInterval"`
-	DataNodeHeartBeatTimeout  int      `yaml:"DataNodeHeartBeatTimeout"`
-	TrashInterval             int      `yaml:"TrashInterval"`
-	MetaFileName              string   `yaml:"MetaFileName"`
-	DataDir                   string   `yaml:"DataDir"`
+	Host                      string `yaml:"Host"`
+	NameNodeId                string `yaml:"NameNodeId"`
+	DataNodeHeartBeatInterval int    `yaml:"DataNodeHeartBeatInterval"`
+	DataNodeHeartBeatTimeout  int    `yaml:"DataNodeHeartBeatTimeout"`
+	TrashInterval             int    `yaml:"TrashInterval"`
+	MetaFileName              string `yaml:"MetaFileName"`
+	DataDir                   string `yaml:"DataDir"`
+	MetaDir                   string
 	Model                     string   `yaml:"Model"`
-	ModelDir                  string   `yaml:"ModelDir"`
+	MeIndex                   int      `yaml:"MeIndex"`
 	PeerNameNodes             []string `yaml:"PeerNameNodes"`
 }
 
@@ -40,6 +41,7 @@ func GetDataNodeConfig() *NameNodeConfig {
 
 func inits() {
 	fileName := "src/nameNode/config/nameNode_config.yml"
+	//fileName := "./config/nameNode_config.yml"
 	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE, 0777)
 	defer file.Close()
 	if err != nil {
@@ -59,28 +61,34 @@ func inits() {
 	if conf == nil {
 		log.Fatal("fail to unmarshal yaml :", err)
 	}
+	dataDir := conf.NameNode.DataDir
 	switch runtime.GOOS {
 	case "windows":
-		conf.NameNode.DataDir = conf.NameNode.DataDir + conf.NameNode.NameNodeId + "\\data"
+		conf.NameNode.DataDir = dataDir + conf.NameNode.NameNodeId + "\\data"
+		conf.NameNode.MetaDir = dataDir + conf.NameNode.NameNodeId + "\\meta"
 	case "linux":
-		conf.NameNode.DataDir = path.Join(conf.NameNode.DataDir+conf.NameNode.NameNodeId, "data")
-	case "os":
+		conf.NameNode.DataDir = path.Join(dataDir+conf.NameNode.NameNodeId, "data")
+		conf.NameNode.MetaDir = path.Join(dataDir+conf.NameNode.NameNodeId, "meta")
 	default:
-		conf.NameNode.DataDir = path.Join(conf.NameNode.DataDir+conf.NameNode.NameNodeId, "data")
+		conf.NameNode.DataDir = path.Join(dataDir+conf.NameNode.NameNodeId, "data")
+		conf.NameNode.MetaDir = path.Join(dataDir+conf.NameNode.NameNodeId, "meta")
 	}
 
 	err = os.MkdirAll(conf.NameNode.DataDir, 0777)
 	if err != nil {
 		log.Fatal("fail to open nameNodeData dir  :", err)
 	}
-
+	err = os.MkdirAll(conf.NameNode.MetaDir, 0777)
+	if err != nil {
+		log.Fatal("fail to open nameNodeData dir  :", err)
+	}
 	model := conf.NameNode.Model
 	if model == Single {
 		return
 	} else if model == Cluster {
-		fmt.Printf("encode nameNode_config %v \n", conf.NameNode.PeerNameNodes[2])
+		fmt.Printf("nameNode_config Cluster %v \n", conf.NameNode.PeerNameNodes)
 	} else {
 		log.Fatal("unknown the nameNode model : ", model)
 	}
-	fmt.Println("encode nameNode_config success")
+	fmt.Println("Decode nameNode_config success.")
 }

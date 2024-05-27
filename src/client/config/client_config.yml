@@ -2,6 +2,6 @@ Client:
   ClientId: 1
   NameNode:
     Host: 127.0.0.1:50070
-    ChunkSize: 102400
-    ChunkReplicaNum: 1
+    ChunkSize: 400
+    ChunkReplicaNum: 2
     ConfirmFileAck: false

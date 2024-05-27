@@ -89,6 +89,27 @@ func TestSplitFileNamePath(t *testing.T) {
 	}
 }
 
+func TestGetFileNameFromChunkName(t *testing.T) {
+	tests := []struct {
+		fileChunkName string
+		expected      string
+	}{
+		{"file_chunk_1", "file"},
+		{"file_chunk_2", "file"},
+		{"file", ""},
+		{"", ""},
+		{"/roo_t/app/t_est.txt_chunk_0", "/roo_t/app/t_est.txt"},
+		{"/root/app/test.txt_chunk_0", "/root/app/test.txt"},
+	}
+
+	for _, test := range tests {
+		result := common.GetFileNameFromChunkName(test.fileChunkName)
+		fmt.Println(result)
+		if result != test.expected {
+			t.Errorf("GetFileNameFromChunkName(%s) = %s; want %s", test.fileChunkName, result, test.expected)
+		}
+	}
+}
 func TestBySortDataNodeFreeSpace(t *testing.T) {
 	// Create test data
 	node1 := &DataNodeInfo{FreeSpace: 100}

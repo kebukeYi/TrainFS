@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"google.golang.org/grpc"
 	"log"
 	"net"
@@ -38,13 +39,17 @@ func main() {
 	}
 	rpcServer := &RpcServer{dataNode: dataNode}
 	server := grpc.NewServer()
+	proto.RegisterClientToDataServiceServer(server, rpcServer)
+	fmt.Printf("DataNode-%s is running at %s ...\n",
+		dataNode.Config.DataNodeId, dataNode.Config.Host)
+	go dataNode.CheckTask()
 	register, err := dataNode.Register()
 	if register {
-		log.Println("register success")
+		log.Println("register success!")
 	} else {
-		log.Println("register fail")
+		log.Println("register fail!")
 	}
-	proto.RegisterClientToDataServiceServer(server, rpcServer)
+
 	err = server.Serve(listen)
 	if err != nil {
 		log.Fatalln(err)

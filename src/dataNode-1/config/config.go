@@ -64,7 +64,6 @@ func inits() {
 		conf.DataNode.DataDir = path.Join(dataDir+conf.DataNode.DataNodeId, "data")
 		conf.DataNode.TaskDir = path.Join(dataDir+conf.DataNode.DataNodeId, "task")
 		conf.DataNode.MetaDir = path.Join(dataDir+conf.DataNode.DataNodeId, "meta")
-	case "os":
 	default:
 		conf.DataNode.DataDir = path.Join(dataDir+conf.DataNode.DataNodeId, "data")
 		conf.DataNode.TaskDir = path.Join(dataDir+conf.DataNode.DataNodeId, "task")
@@ -77,6 +76,6 @@ func inits() {
 	if err != nil {
 		log.Fatal("fail to open nameNodeData dir  :", err)
 	} else {
-		fmt.Println("encode dataNode_config success.")
+		fmt.Println("Decode dataNode_config success.")
 	}
 }

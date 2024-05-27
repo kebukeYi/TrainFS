@@ -1,32 +1,34 @@
 # TrainFS
 
-本单机文件系统,支持基本读写删除,目录等操作; 元数据存储NameNode中,文件切分成块,存储在DataNode中.
+本单机文件系统,支持基本读写删除,目录等操作; 元数据存储NameNode中, 文件大小切分成块, 存储在DataNode中.
 
 ## 功能
 
 - PutFile(localFilePath, remoteFilePath)
     - 举例: PutFile("/home/user/test.txt", "/app/test.txt")
-    - 过程: 将本地目录文件localFilePath`/home/user/test.txt` 上传到文件系统中，注意文件系统并不会真正的创建 remoteFilePath`/app/test.txt`此目录，
-      而是基于`/app/test.txt`文件名，切分成`/app/test.txt_chunk_1`, `/app/test.txt_chunk_2`,...等文件块名字，构成<
-      remoteFilePath,[chunk_1,chunk_2,chunk_3]>
-      kv映射集合元数据，并进行持久化保存；之后NameNode再返回用户指定副本数量的DataNode节点地址，将文件块逐个发送到 primary DataNode节点，底层DataNode节点之间会自动传递用户数据，
-      DataNode节点将文件块存储到本地文件系统，也会记录[`/app/test.txt_chunk_2`, `/app/test.txt_chunk_3`....]元数据；用户上传完毕后，
-      DataNode并告诉给NameNode，我此时保存了哪些数据；用户会再次向NameNode确认文件是否上传完毕； 此时PutFile操作完成，NameNode将返回用户上传成功信息；
+    - 过程: 将本地目录文件localFilePath`/home/user/test.txt` 上传到文件系统中,注意文件系统并不会真正的创建 remoteFilePath`/app/test.txt`此目录,
+      而是基于`/app/test.txt`文件名,切分成`/app/test.txt_chunk_1`, `/app/test.txt_chunk_2`,...等文件块名字,构成<remoteFilePath,[chunk_1,chunk_2,chunk_3]>
+      kv映射集合元数据,并进行持久化保存; 之后NameNode再返回用户指定副本数量的DataNode节点地址,将文件块逐个发送到 primary DataNode节点,底层DataNode节点之间会自动传递用户数据,
+      DataNode节点将文件块存储到本地文件系统,也会记录[`/app/test.txt_chunk_2`, `/app/test.txt_chunk_3`....]元数据;用户上传完毕后,
+      DataNode并告诉给NameNode,我此时保存了哪些数据;用户会再次向NameNode确认文件是否上传完毕; 此时PutFile操作完成,NameNode将返回用户上传成功信息;
 
 - GetFile(remoteFilePath, localFilePath)
     - 举例: GutFile("/home/user/test.txt", "/app/test.txt")
-    - 过程：用户首先向NameNode获知remoteFilePath`/home/user/test.txt`的副本数量的DataNode节点地址，然后向DataNode节点请求文件块；
+    - 过程：用户首先向NameNode获知remoteFilePath`/home/user/test.txt`的副本数量的DataNode节点地址,然后向DataNode节点请求文件块;
 - Mkdir(remoteDirPath)
     - 举例: Mkdir("/home/user/test.txt") || Mkdir("/home/user")
-    - 过程：在NameNode的元数据kv存储中，将remoteDirPath`/home/user/test.txt`添加到元数据中，并设置状态为目录，同时找到此目录的上级目录信息，
-      将本节点添加到上层目录中，随后同时持久化保存更新；
+    - 过程：在NameNode的元数据kv存储中,将remoteDirPath`/home/user/test.txt`添加到元数据中,并设置状态为目录,同时找到此目录的上级目录信息,
+      将本节点添加到上层目录中,随后同时持久化保存更新;
 - DeleteFile(remoteDirPath)
-    - 举例：DeleteFile("/home/user/test.txt") || DeleteFile("/home/user")
-    - 过程：在NameNode的元数据kv存储中，将remoteDirPath`/home/user/test.txt`进行删除，同时找到此目录的上级目录信息，
-      将本节点删除，随后针对上层目录节点持久化保存更新，此时DataNode并不会立即删除，会在随后的心跳响应中，NameNode会下发删除指令； 当删除后，文件副本数量不够时，同样会在心跳响应中下发拷贝指令；
+    - 举例:DeleteFile("/home/user/test.txt") || DeleteFile("/home/user")
+    - 说明:目前仅支持删除文件,不支持删除有 子文件或者子目录 的目录;
+    - 过程:在NameNode的元数据kv存储中,将remoteDirPath`/home/user/test.txt`进行删除,同时找到此目录的上级目录信息,
+      将本节点删除，随后针对上层目录节点持久化保存更新,此时DataNode并不会立即删除,会在随后的心跳响应中,NameNode会下发删除指令;
 - ListDir(remoteDirPath)
-    - 举例：ListDir("/home/user/test.txt") || ListDir("/home/user")
-    - 过程：直接在NameNode的元数据存储中，查询remoteDirPath`/home/user/test.txt`的节点信息，并返回给用户次节点的子节点信息列表；
+    - 举例:ListDir("/home/user/test.txt") || ListDir("/home/user")
+    - 过程:直接在NameNode的元数据存储中,查询remoteDirPath`/home/user/test.txt`的节点信息,并返回给用户次节点的子节点信息列表;
+- ReName(oldRemoteDirPath,newRemoteDirPath)
+    - 待定
 
 ### NameNode
 

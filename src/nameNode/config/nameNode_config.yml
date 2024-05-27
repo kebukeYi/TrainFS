@@ -2,10 +2,9 @@ NameNode:
   Host: 127.0.0.1:50070
   NameNodeId: 1
   DataNodeHeartBeatInterval: 8000
-  DataNodeHeartBeatTimeout: 20000
-  TrashInterval: 1000
-  MetaFileName: data.meta
+  DataNodeHeartBeatTimeout: 30000
   DataDir: F:\\TrainFS\\NameNode
   # model: Single | Cluster
   Model: Single
-  PeerNameNodes: [127.0.0.1:50001,127.0.0.1:50002,127.0.0.1:50003]
+  MeIndex: 0
+  PeerNameNodes: [127.0.0.1:50070,127.0.0.1:50071,127.0.0.1:50072]
