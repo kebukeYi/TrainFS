@@ -3,45 +3,48 @@ package service
 import (
 	"bytes"
 	"encoding/gob"
-	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/kebukeYi/TrainDB"
+	"github.com/kebukeYi/TrainDB/lsm"
+	"github.com/kebukeYi/TrainDB/model"
+	"github.com/kebukeYi/TrainFS/common"
 	"log"
 )
 
 type DataStoreManger struct {
 	path string
-	db   *leveldb.DB
+	db   *TrainDB.TrainKVDB
 }
 
 func OpenDataStoreManger(path string) *DataStoreManger {
-	db, err := leveldb.OpenFile(path, nil)
+	trainKVDB, err, _ := TrainDB.Open(lsm.GetLSMDefaultOpt(path))
 	if err != nil {
-		log.Fatalln(" NameNode Open level.db file fail,", err)
+		log.Fatalln(" DataStoreManger Open trainKVDB fail,", err)
 	}
 	return &DataStoreManger{
-		db:   db,
+		db:   trainKVDB,
 		path: path,
 	}
 }
 
 func (m *DataStoreManger) PutFileMeta(key string, value *FileMeta) error {
 	data2Bytes := m.data2Bytes(value)
-	err := m.db.Put([]byte(key), data2Bytes, nil)
+	err := m.db.Set(model.Entry{Key: []byte(key), Value: data2Bytes})
 	if err != nil {
-		log.Fatalf("PutFileMeta() failed, %v", err)
+		log.Fatalf("DataStoreManger.PutFileMeta() failed, %v", err)
 		return err
 	}
 	return nil
 }
 
 func (m *DataStoreManger) GetFileMeta(key string) (*FileMeta, error) {
-	value, err := m.db.Get([]byte(key), nil)
+	value, err := m.db.Get([]byte(key))
 	if err != nil {
-		if err == leveldb.ErrNotFound {
+		if err == common.ErrFileNotFound {
 			return nil, nil
 		}
 		return nil, err
 	}
-	fileMeta, err := m.bytes2FileMeta(value)
+	fileMeta, err := m.bytes2FileMeta(value.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -49,9 +52,9 @@ func (m *DataStoreManger) GetFileMeta(key string) (*FileMeta, error) {
 }
 
 func (m *DataStoreManger) Delete(key string) error {
-	err := m.db.Delete([]byte(key), nil)
+	err := m.db.Del([]byte(key))
 	if err != nil {
-		if err == leveldb.ErrNotFound {
+		if err == common.ErrFileNotFound {
 			return nil
 		}
 		return err
@@ -61,18 +64,18 @@ func (m *DataStoreManger) Delete(key string) error {
 
 func (m *DataStoreManger) PutDataNodeMeta(key string, value map[string]*DataNodeInfo) {
 	data2Bytes := m.data2Bytes(value)
-	err := m.db.Put([]byte(key), data2Bytes, nil)
+	err := m.db.Set(model.Entry{Key: []byte(key), Value: data2Bytes})
 	if err != nil {
 		log.Fatalf("bytes2FileMeta failed, %v", err)
 	}
 }
 
 func (m *DataStoreManger) GetDataNodeMetas(key string) (map[string]*DataNodeInfo, error) {
-	value, err := m.db.Get([]byte(key), nil)
+	value, err := m.db.Get([]byte(key))
 	if err != nil {
 		return nil, err
 	}
-	dataNodeMetas, err := m.bytes2DataMeta(value)
+	dataNodeMetas, err := m.bytes2DataMeta(value.Value)
 	if err != nil {
 		return nil, err
 	}

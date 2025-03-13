@@ -5,22 +5,28 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	"github.com/syndtr/goleveldb/leveldb"
-	proto "trainfs/src/profile"
+	"github.com/kebukeYi/TrainDB"
+	"github.com/kebukeYi/TrainDB/common"
+	"github.com/kebukeYi/TrainDB/lsm"
+	"github.com/kebukeYi/TrainDB/model"
+	proto "github.com/kebukeYi/TrainFS/profile"
 )
 
 type StoreManger struct {
 	path string
-	db   *leveldb.DB
+	//db   *leveldb.DB
+	db *TrainDB.TrainKVDB
 }
 
 func OpenStoreManager(path string) *StoreManger {
-	db, err := leveldb.OpenFile(path, nil)
+	trainKVDB, err, _ := TrainDB.Open(lsm.GetLSMDefaultOpt(path))
+	//db, err := leveldb.OpenFile(path, nil)
 	if err != nil {
 		fmt.Printf(" DataNode Open level.db path %s file fail,err :%s \n", path, err)
 	}
 	return &StoreManger{
-		db:   db,
+		//db:   db,
+		db:   trainKVDB,
 		path: path,
 	}
 }
@@ -28,23 +34,23 @@ func OpenStoreManager(path string) *StoreManger {
 func (m *StoreManger) PutChunkInfos(key string, value map[string]*proto.ChunkInfo) error {
 	data, err := chunkInfos2bytes(value)
 	if data != nil {
-		err := m.db.Put([]byte(key), data, nil)
+		m.db.Set(model.Entry{Key: []byte(key), Value: data})
 		if err != nil {
 			return err
 		}
 	}
-	return err
+	return nil
 }
 
 func (m *StoreManger) GetChunkInfos(key string) (map[string]*proto.ChunkInfo, error) {
-	value, err := m.db.Get([]byte(key), nil)
+	entry, err := m.db.Get([]byte(key))
 	if err != nil {
-		if err == leveldb.ErrNotFound {
+		if err == common.ErrKeyNotFound {
 			return make(map[string]*proto.ChunkInfo), nil
 		}
 		return nil, err
 	}
-	m2, err := bytes2ChunkInfos(value)
+	m2, err := bytes2ChunkInfos(entry.Value)
 	if m2 != nil {
 		return m2, nil
 	}
@@ -52,7 +58,7 @@ func (m *StoreManger) GetChunkInfos(key string) (map[string]*proto.ChunkInfo, er
 }
 
 func (m *StoreManger) Put(key string, value []byte) error {
-	err := m.db.Put([]byte(key), value, nil)
+	err := m.db.Set(model.Entry{Key: []byte(key), Value: value})
 	if err != nil {
 		return err
 	}
@@ -60,17 +66,17 @@ func (m *StoreManger) Put(key string, value []byte) error {
 }
 
 func (m *StoreManger) Get(key string) ([]byte, error) {
-	value, err := m.db.Get([]byte(key), nil)
+	value, err := m.db.Get([]byte(key))
 	if err != nil {
 		return nil, err
 	}
-	return value, nil
+	return value.Value, nil
 }
 
 func (m *StoreManger) Delete(key string) error {
-	err := m.db.Delete([]byte(key), nil)
+	err := m.db.Del([]byte(key))
 	if err != nil {
-		if err == leveldb.ErrNotFound {
+		if err == common.ErrKeyNotFound {
 			return nil
 		}
 		return err
@@ -81,7 +87,7 @@ func (m *StoreManger) Delete(key string) error {
 func (m *StoreManger) PutReplications(key string, value []*Replication) error {
 	data, err := replications2bytes(value)
 	if data != nil {
-		err = m.db.Put([]byte(key), data, nil)
+		err = m.db.Set(model.Entry{Key: []byte(key), Value: data})
 		if err != nil {
 			return err
 		}
@@ -90,14 +96,14 @@ func (m *StoreManger) PutReplications(key string, value []*Replication) error {
 }
 
 func (m *StoreManger) GetReplications(key string) ([]*Replication, error) {
-	data, err := m.db.Get([]byte(key), nil)
+	data, err := m.db.Get([]byte(key))
 	if err != nil {
-		if err == leveldb.ErrNotFound {
+		if err == common.ErrKeyNotFound {
 			return make([]*Replication, 0), nil
 		}
 		return nil, err
 	}
-	m2, err := bytes2Replications(data)
+	m2, err := bytes2Replications(data.Value)
 	if m2 != nil {
 		return m2, nil
 	}
@@ -107,7 +113,7 @@ func (m *StoreManger) GetReplications(key string) ([]*Replication, error) {
 func (m *StoreManger) PutTrashs(key string, value []string) error {
 	data, err := strings2bytes(value)
 	if data != nil {
-		err := m.db.Put([]byte(key), data, nil)
+		err := m.db.Set(model.Entry{Key: []byte(key), Value: data})
 		if err != nil {
 			return err
 		}
@@ -116,14 +122,14 @@ func (m *StoreManger) PutTrashs(key string, value []string) error {
 }
 
 func (m *StoreManger) GetTrashs(key string) ([]string, error) {
-	value, err := m.db.Get([]byte(key), nil)
+	value, err := m.db.Get([]byte(key))
 	if err != nil {
-		if err == leveldb.ErrNotFound {
+		if err == common.ErrKeyNotFound {
 			return make([]string, 0), nil
 		}
 		return nil, err
 	}
-	m2, err := bytes2Strings(value)
+	m2, err := bytes2Strings(value.Value)
 	if m2 != nil {
 		return m2, nil
 	}

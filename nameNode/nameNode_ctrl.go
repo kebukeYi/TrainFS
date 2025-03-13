@@ -3,12 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/kebukeYi/TrainFS/common"
+	"github.com/kebukeYi/TrainFS/nameNode/service"
+	proto "github.com/kebukeYi/TrainFS/profile"
 	"google.golang.org/grpc"
 	"log"
 	"net"
-	"trainfs/src/common"
-	"trainfs/src/nameNode/service"
-	proto "trainfs/src/profile"
 )
 
 type RpcServer struct {

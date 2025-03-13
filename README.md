@@ -32,7 +32,7 @@
 
 ### NameNode
 
-基本目标：保证知道 文件存储在哪些地方
+基本目标: 保证知道 文件存储在哪些地方;
 
 第一步，针对用户上传文件过程，NameNode可把 remoteFilePath`/app/test.txt`文件名，切分成`/app/test.txt_chunk_1`, `/app/test.txt_chunk_2`
 ,...等文件块名字； 第二步，根据DataNode的上传信息，NameNod在内存中做出统计，将`/app/test.txt_chunk_1`, `/app/test.txt_chunk_2`等文件块的存储地址进行持久化保存，

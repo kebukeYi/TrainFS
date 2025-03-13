@@ -3,9 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
+	proto "github.com/kebukeYi/TrainFS/profile"
 	"github.com/shirou/gopsutil/v3/disk"
 	"time"
-	proto "trainfs/src/profile"
 )
 
 func (dataNode *DataNode) Register() (bool, error) {

@@ -3,11 +3,11 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/kebukeYi/TrainFS/dataNode-1/config"
+	proto "github.com/kebukeYi/TrainFS/profile"
 	"google.golang.org/grpc"
 	"sync"
 	"time"
-	"trainfs/src/dataNode-1/config"
-	proto "trainfs/src/profile"
 )
 
 const (
@@ -20,7 +20,6 @@ type DataNode struct {
 	mux             sync.Mutex
 	Config          *config.DataNode
 	name            string
-	FileBuffer      *FileBuffer
 	dataStoreManger *StoreManger
 
 	taskStoreManger *StoreManger
@@ -33,6 +32,7 @@ type DataNode struct {
 	TrashTask []string
 	TrashChan chan []string
 }
+
 type Replication struct {
 	FilePathName      string
 	FilePathChunkName string
@@ -232,7 +232,6 @@ func (dataNode *DataNode) GetDataNodeInfo(arg *proto.FileOperationArg) (*proto.F
 		chunkInfos = append(chunkInfos, chunkInfo)
 	}
 	chunk := &proto.FileLocationInfo{Chunks: chunkInfos, DataNodeAddress: dataNode.Config.Host}
-
 	return chunk, nil
 }
 

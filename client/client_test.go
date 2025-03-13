@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
+	"github.com/kebukeYi/TrainFS/client/cli"
+	"github.com/kebukeYi/TrainFS/common"
 	"testing"
 	"time"
-	"trainfs/src/client/cli"
-	"trainfs/src/common"
 )
 
 func TestGetFileOfChunkName(t *testing.T) {

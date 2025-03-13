@@ -3,11 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/kebukeYi/TrainFS/dataNode-1/service"
+	proto "github.com/kebukeYi/TrainFS/profile"
 	"google.golang.org/grpc"
 	"log"
 	"net"
-	"trainfs/src/dataNode-1/service"
-	proto "trainfs/src/profile"
 )
 
 type RpcServer struct {
@@ -40,8 +40,7 @@ func main() {
 	rpcServer := &RpcServer{dataNode: dataNode}
 	server := grpc.NewServer()
 	proto.RegisterClientToDataServiceServer(server, rpcServer)
-	fmt.Printf("DataNode-%s is running at %s ...\n",
-		dataNode.Config.DataNodeId, dataNode.Config.Host)
+	fmt.Printf("DataNode-%s is running at %s ...\n", dataNode.Config.DataNodeId, dataNode.Config.Host)
 	go dataNode.CheckTask()
 	register, err := dataNode.Register()
 	if register {

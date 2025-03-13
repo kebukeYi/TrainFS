@@ -3,14 +3,14 @@ package cli
 import (
 	"context"
 	"fmt"
+	"github.com/kebukeYi/TrainFS/client/config"
+	"github.com/kebukeYi/TrainFS/common"
+	proto "github.com/kebukeYi/TrainFS/profile"
 	"google.golang.org/grpc"
 	"io"
 	"log"
 	"os"
 	"strconv"
-	"trainfs/src/client/config"
-	"trainfs/src/common"
-	proto "trainfs/src/profile"
 )
 
 type Client struct {

@@ -5,22 +5,25 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/kebukeYi/TrainDB"
+	"github.com/kebukeYi/TrainDB/common"
+	"github.com/kebukeYi/TrainDB/lsm"
+	"github.com/kebukeYi/TrainDB/model"
 	"log"
 )
 
 type TaskStoreManger struct {
 	path string
-	db   *leveldb.DB
+	db   *TrainDB.TrainKVDB
 }
 
 func OpenTaskStoreManger(path string) *TaskStoreManger {
-	db, err := leveldb.OpenFile(path, nil)
+	trainKVDB, err, _ := TrainDB.Open(lsm.GetLSMDefaultOpt(path))
 	if err != nil {
-		log.Fatalln(" NameNode Open level.db file fail,", err)
+		log.Fatalln(" TaskStoreManger Open trainKVDB fail,", err)
 	}
 	return &TaskStoreManger{
-		db:   db,
+		db:   trainKVDB,
 		path: path,
 	}
 }
@@ -28,7 +31,7 @@ func OpenTaskStoreManger(path string) *TaskStoreManger {
 func (m *TaskStoreManger) PutReplications(key string, value []*Replication) error {
 	data, err := replications2bytes(value)
 	if data != nil {
-		err := m.db.Put([]byte(key), data, nil)
+		err := m.db.Set(model.NewEntry([]byte(key), data))
 		if err != nil {
 			return err
 		}
@@ -37,14 +40,14 @@ func (m *TaskStoreManger) PutReplications(key string, value []*Replication) erro
 }
 
 func (m *TaskStoreManger) GetReplications(key string) ([]*Replication, error) {
-	data, err := m.db.Get([]byte(key), nil)
+	data, err := m.db.Get([]byte(key))
 	if err != nil {
-		if err == leveldb.ErrNotFound {
+		if err == common.ErrKeyNotFound {
 			return make([]*Replication, 0), nil
 		}
 		return nil, err
 	}
-	m2, err := bytes2Replications(data)
+	m2, err := bytes2Replications(data.Value)
 	if m2 != nil {
 		return m2, nil
 	}
@@ -54,7 +57,7 @@ func (m *TaskStoreManger) GetReplications(key string) ([]*Replication, error) {
 func (m *TaskStoreManger) PutTrashs(key string, value []string) error {
 	data, err := strings2bytes(value)
 	if data != nil {
-		err := m.db.Put([]byte(key), data, nil)
+		err := m.db.Set(model.NewEntry([]byte(key), data))
 		if err != nil {
 			return err
 		}
@@ -63,14 +66,14 @@ func (m *TaskStoreManger) PutTrashs(key string, value []string) error {
 }
 
 func (m *TaskStoreManger) GetTrashs(key string) ([]string, error) {
-	value, err := m.db.Get([]byte(key), nil)
+	value, err := m.db.Get([]byte(key))
 	if err != nil {
-		if err == leveldb.ErrNotFound {
+		if err == common.ErrKeyNotFound {
 			return make([]string, 0), nil
 		}
 		return nil, err
 	}
-	m2, err := bytes2Strings(value)
+	m2, err := bytes2Strings(value.Value)
 	if m2 != nil {
 		return m2, nil
 	}
@@ -78,9 +81,9 @@ func (m *TaskStoreManger) GetTrashs(key string) ([]string, error) {
 }
 
 func (m *TaskStoreManger) Delete(key string) error {
-	err := m.db.Delete([]byte(key), nil)
+	err := m.db.Del([]byte(key))
 	if err != nil {
-		if err == leveldb.ErrNotFound {
+		if err == common.ErrKeyNotFound {
 			return nil
 		}
 		return err

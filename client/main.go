@@ -2,13 +2,12 @@ package main
 
 import (
 	"fmt"
+	"github.com/kebukeYi/TrainFS/client/cli"
 	"time"
-	"trainfs/src/client/cli"
 )
 
 func main() {
 	client := cli.NewClient()
-	fmt.Println(client)
 	//localPath := "F:\\yyyyy.jpg"
 	localPathGet := "F:\\getappyyyyy.jpg"
 	//localPathGet := "F:\\getlocalyyyyy.jpg"

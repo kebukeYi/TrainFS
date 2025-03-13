@@ -2,13 +2,13 @@ package service
 
 import (
 	"fmt"
+	"github.com/kebukeYi/TrainFS/common"
+	"github.com/kebukeYi/TrainFS/nameNode/config"
+	proto "github.com/kebukeYi/TrainFS/profile"
 	"github.com/syndtr/goleveldb/leveldb"
 	"sort"
 	"strings"
 	"sync"
-	"trainfs/src/common"
-	"trainfs/src/nameNode/config"
-	proto "trainfs/src/profile"
 )
 
 type NameNode struct {

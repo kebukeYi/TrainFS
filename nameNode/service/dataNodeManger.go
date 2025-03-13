@@ -2,9 +2,9 @@ package service
 
 import (
 	"fmt"
+	"github.com/kebukeYi/TrainFS/common"
+	proto "github.com/kebukeYi/TrainFS/profile"
 	"time"
-	"trainfs/src/common"
-	proto "trainfs/src/profile"
 )
 
 const (
@@ -13,10 +13,9 @@ const (
 )
 
 const (
-	DataNodeListKey string = "DataNodeListKey"
-	DataNodeKey     string = "DataNodeKey"
-	trashKey        string = "trash"
-	replicationKey  string = "replication"
+	DataNodeKey    string = "DataNodeKey"
+	trashKey       string = "trash"
+	replicationKey string = "replication"
 )
 
 type DataNodeInfo struct {

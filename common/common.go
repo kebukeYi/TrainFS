@@ -19,7 +19,6 @@ var ErrDirAlreadyExists = errors.New("NameNode: the dir already exists")
 var ErrCommitChunkType = errors.New("NameNode: CommitChunk not found")
 var ErrChunkReplicaNotFound = errors.New("NameNode: chunk replica not found")
 
-var ErrNotEnoughStorageSpace = errors.New("DataNode: not enough storage space ")
 var ErrEnoughReplicaDataNodeServer = errors.New("DataNode: not enough replica num dataNodeServer")
 var ErrEnoughUpDataNodeServer = errors.New("DataNode: not enough up num dataNodeServer")
 
