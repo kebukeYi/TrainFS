@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/kebukeYi/TrainFS/dataNode-1/service"
+	"github.com/kebukeYi/TrainFS/dataNode-3/service"
 	proto "github.com/kebukeYi/TrainFS/profile"
 	"google.golang.org/grpc"
 	"log"

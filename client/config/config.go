@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"gopkg.in/yaml.v2"
 	"log"
 	"os"
@@ -31,12 +30,10 @@ func GetClientConfig() *ClientConfig {
 }
 
 func inits() {
-	//fileName := "E:\\Projects\\GoLang-Projects\\TrainFS\\src\\client\\config\\client_config.yml"
-	// 全部以 working directory 为 项目主目录!!!
-	//fileName := "./client_config.yml" // package 在同级目录
-	fileName := "./config/client_config.yml" // package 在上层目录
-	//fileName := "src/client/config/client_config.yml" // package 在上层目录
+	//fileName := "client/config/client_config.yml" // package 在同级目录
+	fileName := "./config/client_config.yml" // package 在同级目录
 	file, err := os.OpenFile(fileName, os.O_RDWR, 0777)
+	defer file.Close()
 	if err != nil {
 		log.Fatalf(" fail to read fileName: %s, err: %s ;\n", fileName, err)
 	}
@@ -51,5 +48,4 @@ func inits() {
 	if err != nil {
 		log.Fatal("fail to yaml unmarshal:", err)
 	}
-	fmt.Println("encode client_config success.")
 }

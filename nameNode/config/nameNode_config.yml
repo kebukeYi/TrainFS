@@ -3,7 +3,7 @@ NameNode:
   NameNodeId: 1
   DataNodeHeartBeatInterval: 8000
   DataNodeHeartBeatTimeout: 30000
-  DataDir: F:\\TrainFS\\NameNode
+  DataDir: /usr/projects_gen_data/goprogendata/trainfsdata/test/namenode
   # model: Single | Cluster
   Model: Single
   MeIndex: 0

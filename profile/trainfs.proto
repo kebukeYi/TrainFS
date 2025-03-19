@@ -1,6 +1,10 @@
 syntax = "proto3";
 
-option go_package = "../profile;proto";
+option go_package = "../profile1;proto";
+
+// 1.go get -u google.golang.org/protobuf/proto
+// 2.go get -u google.golang.org/protobuf/protoc-gen-go
+// 3.protoc --go_out=. --go-grpc_out=. ./*.proto
 
 service ClientToNameService{
   rpc PutFile(FileOperationArg)returns (DataNodeChain);

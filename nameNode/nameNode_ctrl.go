@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/kebukeYi/TrainFS/common"
 	"github.com/kebukeYi/TrainFS/nameNode/service"
 	proto "github.com/kebukeYi/TrainFS/profile"
 	"google.golang.org/grpc"
@@ -39,8 +38,7 @@ func (s RpcServer) ListDir(con context.Context, arg *proto.FileOperationArg) (*p
 	return s.nameNode.ListDir(arg)
 }
 func (s RpcServer) ReName(con context.Context, arg *proto.FileOperationArg) (*proto.ReNameReply, error) {
-	//return s.nameNode.ReName(arg)
-	return nil, common.ErrNotSupported
+	return s.nameNode.ReName(arg)
 }
 
 func (s RpcServer) Mkdir(con context.Context, arg *proto.FileOperationArg) (*proto.MkdirReply, error) {
@@ -65,6 +63,12 @@ func (s RpcServer) LiveDetection(con context.Context, arg *proto.LiveDetectionAr
 
 func main() {
 	newNameNode := service.NewNameNode()
+	defer func(newNameNode *service.NameNode) {
+		err := newNameNode.Close()
+		if err != nil {
+			log.Fatalf("failed to close: %v", err)
+		}
+	}(newNameNode)
 	server1 := &RpcServer{nameNode: newNameNode}
 	server2 := &RpcServer{nameNode: newNameNode}
 	listen, err := net.Listen("tcp", newNameNode.Config.NameNode.Host)
@@ -75,11 +79,9 @@ func main() {
 	proto.RegisterClientToNameServiceServer(server, server1)
 	proto.RegisterDataToNameServiceServer(server, server2)
 	fmt.Printf("NameNode server %s start... \n", newNameNode.Config.NameNode.Host)
-	go newNameNode.CheckHeartBeat()
+	go newNameNode.CheckHeartBeat() // 检测dataNode心跳;
 	err = server.Serve(listen)
 	if err != nil {
 		log.Fatalf("failed to serve: %v", err)
-	} else {
-		fmt.Printf("NameNode server %s start... \n", newNameNode.Config.NameNode.Host)
 	}
 }

@@ -33,7 +33,7 @@ func GetDataNodeConfig() *DataNode {
 }
 
 func inits() {
-	fileName := "dataNode-1/config/dataNode_config.yml"
+	fileName := "dataNode-3/config/dataNode_config.yml"
 	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE, 0777)
 	defer file.Close()
 	if err != nil {

@@ -3,7 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
-	"github.com/kebukeYi/TrainFS/dataNode-1/config"
+	"github.com/kebukeYi/TrainFS/common"
+	"github.com/kebukeYi/TrainFS/dataNode-2/config"
 	proto "github.com/kebukeYi/TrainFS/profile"
 	"google.golang.org/grpc"
 	"sync"
@@ -42,30 +43,29 @@ type Replication struct {
 func NewDataNode() *DataNode {
 	dataNode := &DataNode{}
 	dataNode.Config = config.GetDataNodeConfig()
-	//common.ClearDir(dataNode.Config.DataDir)
-	//common.ClearDir(dataNode.Config.MetaDir)
-	//common.ClearDir(dataNode.Config.TaskDir)
+	common.ClearDir(dataNode.Config.DataDir)
+	common.ClearDir(dataNode.Config.MetaDir)
+	common.ClearDir(dataNode.Config.TaskDir)
 	dataNode.dataStoreManger = OpenStoreManager(dataNode.Config.DataDir)
 	dataNode.taskStoreManger = OpenStoreManager(dataNode.Config.TaskDir)
 	dataNode.metaStoreManger = OpenStoreManager(dataNode.Config.MetaDir)
-
 	chunkInfos, err := dataNode.metaStoreManger.GetChunkInfos(AllChunkInfosKey)
 	if err != nil {
-		fmt.Printf("NewDataNode.dataNode.metaStoreManger.GetChunkInfos(%s) err: %v \n", AllChunkInfosKey, err)
+		fmt.Printf("NewDataNode.dataNode-1.metaStoreManger.GetChunkInfos(%s) err: %v \n", AllChunkInfosKey, err)
 		return nil
 	}
 	dataNode.allChunkInfos = chunkInfos
 
 	trashs, err := dataNode.taskStoreManger.GetTrashes(trashKey)
 	if err != nil {
-		fmt.Printf("NewDataNode.dataNode.metaStoreManger.GetTrashes(%s) err: %v \n", trashKey, err)
+		fmt.Printf("NewDataNode.dataNode-1.metaStoreManger.GetTrashes(%s) err: %v \n", trashKey, err)
 		return nil
 	}
 	dataNode.TrashTask = trashs
 
 	replications, err := dataNode.taskStoreManger.GetReplications(replicationKey)
 	if err != nil {
-		fmt.Printf("NewDataNode.dataNode.metaStoreManger.GetReplications(%s) err: %v \n", replicationKey, err)
+		fmt.Printf("NewDataNode.dataNode-1.metaStoreManger.GetReplications(%s) err: %v \n", replicationKey, err)
 		return nil
 	}
 	dataNode.ReplicaTask = replications
@@ -156,14 +156,11 @@ func (dataNode *DataNode) PutChunk(stream proto.ClientToDataService_PutChunkServ
 	dataNode.allChunkInfos[filePathChunkName] = chunkInfo
 	err = dataNode.metaStoreManger.PutChunkInfos(AllChunkInfosKey, dataNode.allChunkInfos)
 	if err != nil {
-		fmt.Printf("DataNode[%s]-%s AllChunkInfos,StoreManger.PutChunkInfos(%s) ;error: %s \n",
+		fmt.Printf("DataNode[%s]-%s AllChunkInfosStoreManger.PutChunkInfos(%s) ;error: %s \n",
 			dataNode.Config.Host, dataNode.Config.DataNodeId, AllChunkInfosKey, err)
 		delete(dataNode.allChunkInfos, filePathChunkName)
 		dataNode.mux.Unlock()
 		panic(err)
-	} else {
-		fmt.Printf("DataNode[%s]-%s AllChunkInfos,StoreManger.PutChunkInfos(%s) success.\n",
-			dataNode.Config.Host, dataNode.Config.DataNodeId, AllChunkInfosKey)
 	}
 	dataNode.mux.Unlock()
 

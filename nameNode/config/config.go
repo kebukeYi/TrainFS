@@ -21,7 +21,7 @@ type NameNode struct {
 	TrashInterval             int    `yaml:"TrashInterval"`
 	MetaFileName              string `yaml:"MetaFileName"`
 	DataDir                   string `yaml:"DataDir"`
-	MetaDir                   string
+	TaskDir                   string
 	Model                     string   `yaml:"Model"`
 	MeIndex                   int      `yaml:"MeIndex"`
 	PeerNameNodes             []string `yaml:"PeerNameNodes"`
@@ -40,9 +40,9 @@ func GetDataNodeConfig() *NameNodeConfig {
 }
 
 func inits() {
-	fileName := "src/nameNode/config/nameNode_config.yml"
-	//fileName := "./config/nameNode_config.yml"
-	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE, 0777)
+	//fileName := "nameNode_config.yml"
+	fileName := "nameNode/config/nameNode_config.yml"
+	file, err := os.OpenFile(fileName, os.O_RDWR, 0777)
 	defer file.Close()
 	if err != nil {
 		log.Fatalf(" fail to read fileName: %s, err: %s ;\n", fileName, err)
@@ -65,20 +65,20 @@ func inits() {
 	switch runtime.GOOS {
 	case "windows":
 		conf.NameNode.DataDir = dataDir + conf.NameNode.NameNodeId + "\\data"
-		conf.NameNode.MetaDir = dataDir + conf.NameNode.NameNodeId + "\\meta"
+		conf.NameNode.TaskDir = dataDir + conf.NameNode.NameNodeId + "\\task"
 	case "linux":
 		conf.NameNode.DataDir = path.Join(dataDir+conf.NameNode.NameNodeId, "data")
-		conf.NameNode.MetaDir = path.Join(dataDir+conf.NameNode.NameNodeId, "meta")
+		conf.NameNode.TaskDir = path.Join(dataDir+conf.NameNode.NameNodeId, "task")
 	default:
 		conf.NameNode.DataDir = path.Join(dataDir+conf.NameNode.NameNodeId, "data")
-		conf.NameNode.MetaDir = path.Join(dataDir+conf.NameNode.NameNodeId, "meta")
+		conf.NameNode.TaskDir = path.Join(dataDir+conf.NameNode.NameNodeId, "task")
 	}
 
 	err = os.MkdirAll(conf.NameNode.DataDir, 0777)
 	if err != nil {
 		log.Fatal("fail to open nameNodeData dir  :", err)
 	}
-	err = os.MkdirAll(conf.NameNode.MetaDir, 0777)
+	err = os.MkdirAll(conf.NameNode.TaskDir, 0777)
 	if err != nil {
 		log.Fatal("fail to open nameNodeData dir  :", err)
 	}
@@ -88,7 +88,7 @@ func inits() {
 	} else if model == Cluster {
 		fmt.Printf("nameNode_config Cluster %v \n", conf.NameNode.PeerNameNodes)
 	} else {
-		log.Fatal("unknown the nameNode model : ", model)
+		log.Fatal("unknown the nameNode model: ", model)
 	}
 	fmt.Println("Decode nameNode_config success.")
 }

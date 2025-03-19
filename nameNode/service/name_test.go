@@ -1,15 +1,16 @@
 package service
 
 import (
+	"errors"
 	"fmt"
+	DBcommon "github.com/kebukeYi/TrainDB/common"
 	"github.com/kebukeYi/TrainFS/common"
-	"github.com/syndtr/goleveldb/leveldb"
 	"sort"
 	"strings"
 	"testing"
 )
 
-func TestGo(t *testing.T) {
+func TestFilePathSplit(t *testing.T) {
 	tests := []struct {
 		path     string
 		expected string
@@ -22,14 +23,14 @@ func TestGo(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result := goFunc(test.path)
+		result := SplitPath(test.path)
 		if result != test.expected {
-			t.Errorf("goFunc(%s) = %s; want %s", test.path, result, test.expected)
+			t.Errorf("SplitPath(%s) = %s; want %s", test.path, result, test.expected)
 		}
 	}
 }
 
-func goFunc(path string) string {
+func SplitPath(path string) string {
 	if path == "/" || path == "" {
 		return ""
 	}
@@ -54,9 +55,9 @@ func TestForPath(t *testing.T) {
 	split1 := strings.Split(path1, "/")
 	split2 := strings.Split(path2, "/")
 	split3 := strings.Split(path3, "/")
-	fmt.Println(split)       // [ user local app ]
-	fmt.Println(split1)      // [ user local app]
-	fmt.Println(split2)      // [ user]
+	fmt.Println(split)       // [ ,user,local,app, ]
+	fmt.Println(split1)      // [ ,user,local,app]
+	fmt.Println(split2)      // [ ,user]
 	fmt.Println(split3)      // [ ]
 	fmt.Println(len(split))  // 5
 	fmt.Println(len(split1)) // 4
@@ -81,11 +82,35 @@ func TestSplitFileNamePath(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		fileName, path := splitFileNamePath(test.fileNamePath)
+		fileName, path := common.SplitFileNamePath(test.fileNamePath)
 		fmt.Printf("fileName:%s; path:%s \n", fileName, path)
 		//if fileName != test.expectedFile || path != test.expectedPath {
 		//	t.Errorf("splitFileNamePath(%s) = (%s, %s), expected (%s, %s)", test.fileNamePath, fileName, path, test.expectedFile, test.expectedPath)
 		//}
+	}
+}
+
+func TestGetChunkIdOfFileChunkName_Success(t *testing.T) {
+	tests := []struct {
+		fileChunkName string
+		expected      int32
+	}{
+		{"file_chunk_1", 1},
+		{"file_chunk_2", 2},
+		{"file", -1},
+		{"", -1},
+		{"/roo_t/app/t_est.txt_chunk_0", 0},
+		{"/root/app/test.txt_chunk_0", 0},
+		{"/root/app/test.txt_chunk_777", 777},
+	}
+
+	for _, test := range tests {
+		result := common.GetChunkIdOfFileChunkName(test.fileChunkName)
+		fmt.Println(result)
+		if result != test.expected {
+			t.Errorf("GetFileNameFromChunkName(%s) = %d; want %d",
+				test.fileChunkName, result, test.expected)
+		}
 	}
 }
 
@@ -100,6 +125,7 @@ func TestGetFileNameFromChunkName(t *testing.T) {
 		{"", ""},
 		{"/roo_t/app/t_est.txt_chunk_0", "/roo_t/app/t_est.txt"},
 		{"/root/app/test.txt_chunk_0", "/root/app/test.txt"},
+		{"/root/app/test.txt_chunk_777", "/root/app/test.txt"},
 	}
 
 	for _, test := range tests {
@@ -110,6 +136,7 @@ func TestGetFileNameFromChunkName(t *testing.T) {
 		}
 	}
 }
+
 func TestBySortDataNodeFreeSpace(t *testing.T) {
 	// Create test data
 	node1 := &DataNodeInfo{FreeSpace: 100}
@@ -137,7 +164,7 @@ type MockLevelDB struct {
 func (m *MockLevelDB) GetFileMeta(path string) (*FileMeta, error) {
 	fileMeta, ok := m.fileMetaMap[path]
 	if !ok {
-		return nil, leveldb.ErrNotFound
+		return nil, DBcommon.ErrKeyNotFound
 	}
 	return fileMeta, nil
 }
@@ -154,7 +181,7 @@ func (m *MockLevelDB) SetFileMeta(path string, fileMeta *FileMeta) {
 func (nn *MockLevelDB) checkPathOrCreate(path string, notCreate bool) (*FileMeta, error) {
 	if path == "/" {
 		fileMeta, err := nn.GetFileMeta(path)
-		if err == leveldb.ErrNotFound && notCreate {
+		if errors.Is(err, DBcommon.ErrKeyNotFound) && notCreate {
 			fileMeta := &FileMeta{
 				IsDir:     true,
 				ChildList: make(map[string]*FileMeta),
@@ -213,11 +240,8 @@ func TestNameNodeCheckPathOrCreate(t *testing.T) {
 		nn.SetFileMeta(path, fileMeta)
 
 		// Execute
-		result, _ := nn.checkPathOrCreate(path, false)
-		fmt.Println(result)
-		// Verify
-		//assert.NoError(t, err)
-		//assert.Equal(t, fileMeta, result)
+		result, err := nn.checkPathOrCreate(path, false)
+		fmt.Printf("result:%v; err:%v\n", result, err)
 	})
 
 	t.Run("Path does not exist and notCreate is true", func(t *testing.T) {
@@ -225,8 +249,8 @@ func TestNameNodeCheckPathOrCreate(t *testing.T) {
 		path := "/new/dir"
 
 		// Execute
-		result, _ := nn.checkPathOrCreate(path, true)
-		fmt.Println(result)
+		result, err := nn.checkPathOrCreate(path, true)
+		fmt.Printf("result:%v; err:%v\n", result, err)
 		// Verify
 		//assert.NoError(t, err)
 		//assert.NotNil(t, result)
@@ -245,8 +269,8 @@ func TestNameNodeCheckPathOrCreate(t *testing.T) {
 		})
 
 		// Execute
-		result, _ := nn.checkPathOrCreate(path, false)
-		fmt.Println(result)
+		result, err := nn.checkPathOrCreate(path, false)
+		fmt.Printf("result:%v; err:%v\n", result, err)
 		// Verify
 		//assert.Error(t, err)
 		//assert.Equal(t, common.ErrNotDir, err)

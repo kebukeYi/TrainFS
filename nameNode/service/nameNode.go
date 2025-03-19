@@ -1,11 +1,12 @@
 package service
 
 import (
+	"errors"
 	"fmt"
+	DBcommon "github.com/kebukeYi/TrainDB/common"
 	"github.com/kebukeYi/TrainFS/common"
 	"github.com/kebukeYi/TrainFS/nameNode/config"
 	proto "github.com/kebukeYi/TrainFS/profile"
-	"github.com/syndtr/goleveldb/leveldb"
 	"sort"
 	"strings"
 	"sync"
@@ -14,7 +15,7 @@ import (
 type NameNode struct {
 	Config    *config.NameNodeConfig
 	mux       sync.RWMutex
-	dataStore *DataStoreManger
+	metaStore *MetaStoreManger
 	taskStore *TaskStoreManger
 
 	// <fileName1, [chunk1,chunk2,chunk3]>
@@ -36,52 +37,55 @@ type NameNode struct {
 func NewNameNode() *NameNode {
 	nameNode := &NameNode{}
 	nameNode.Config = config.GetDataNodeConfig()
-	nameNode.dataStore = OpenDataStoreManger(nameNode.Config.NameNode.DataDir)
-	nameNode.taskStore = OpenTaskStoreManger(nameNode.Config.NameNode.MetaDir)
-	nameNode.chunkLocation = make(map[string][]*ReplicaMeta)
-	nameNode.dataNodeChunks = make(map[string][]*ChunkMeta)
-	nameNode.dataNodeInfos = make(map[string]*DataNodeInfo)
+	common.ClearDir(nameNode.Config.NameNode.DataDir)
+	common.ClearDir(nameNode.Config.NameNode.TaskDir)
+	nameNode.metaStore = OpenDataStoreManger(nameNode.Config.NameNode.DataDir)
+	nameNode.taskStore = OpenTaskStoreManger(nameNode.Config.NameNode.TaskDir)
+	nameNode.chunkLocation = make(map[string][]*ReplicaMeta) // 等待 dataNode-1 上报的数据;
+	nameNode.dataNodeChunks = make(map[string][]*ChunkMeta)  // 等待 dataNode-1 上报的数据;
+	nameNode.dataNodeInfos = make(map[string]*DataNodeInfo)  // dataNode-1 信息;
 	return nameNode
 }
 
 func (nn *NameNode) PutFile(arg *proto.FileOperationArg) (*proto.DataNodeChain, error) {
 	nn.mux.Lock()
 	defer nn.mux.Unlock()
-	// arg.GetFileName() : fileName: /user/app/example.txt
-	// path: [user,app]
+	pathFileName := arg.GetFileName() // fileName: /user/app/example.txt
+	// 解析出path: [user,app]
 	// fileName: example.txt
-	pathFileName := arg.GetFileName()
-	fileName, path := splitFileNamePath(pathFileName)
+	fileName, path := common.SplitFileNamePath(pathFileName)
+	// 获得path的最后一个文件夹索引,并且遵循没有就创建原则;
 	parentNode, err := nn.checkPathOrCreate(path, true)
 	if err != nil {
 		return nil, err
 	}
+	// 改进: 根据参数,是否覆盖原文件; 还是追加(1)(2)(3)等副本文件;
 	if _, ok := parentNode.ChildList[fileName]; ok {
 		return nil, common.ErrFileAlreadyExists
 	}
 	fileMeta := &FileMeta{
 		FileName:    fileName,                                           // example.txt
-		KeyFileName: CreatKeyFileName(parentNode.KeyFileName, fileName), // /user/app/example.txt
-		FileSize:    arg.GetFileSize(),
+		KeyFileName: CreatKeyFileName(parentNode.KeyFileName, fileName), // /user/app + / + example.txt
+		FileSize:    arg.GetFileSize(),                                  // 文件总大小;
 		IsDir:       false,
 		ChunkNum:    arg.ChunkNum,
 	}
 	parentNode.ChildList[fileName] = fileMeta
-	// todo 等待DataNode commitChunk 后再持久化
-	// todo 不等待DataNode commitChunk 后再持久化,先持久化
-	err = nn.dataStore.PutFileMeta(fileMeta.KeyFileName, fileMeta)
+	// 1. 首先保存 最底层文件块信息;
+	err = nn.metaStore.PutFileMeta(fileMeta.KeyFileName, fileMeta)
 	if err != nil {
 		return nil, err
 	}
-	err = nn.dataStore.PutFileMeta(parentNode.KeyFileName, parentNode)
+	// 2. 再保存 父节点信息;
+	err = nn.metaStore.PutFileMeta(parentNode.KeyFileName, parentNode)
 	if err != nil {
 		return nil, err
 	}
+	// 3. 选择 dataNode节点;
 	choseDataNodes, err := nn.choseDataNode(int(arg.ReplicaNum))
 	if err != nil {
 		return nil, err
 	}
-	//dataNode := make([]string, len(choseDataNodes))
 	dataNode := make([]string, 0)
 	for _, node := range choseDataNodes {
 		dataNode = append(dataNode, node.Address)
@@ -100,6 +104,7 @@ func (nn *NameNode) ConfirmFile(arg *proto.ConfirmFileArg) (*proto.ConfirmFileRe
 		if _, ok := nn.chunkLocation[info.FilePathChunkName]; !ok {
 			if arg.Ack {
 				reply.Success = false
+				reply.Context += info.FilePathChunkName + " is not exist. "
 				return reply, nil
 			} else {
 				continue
@@ -114,12 +119,13 @@ func (nn *NameNode) GetFile(arg *proto.FileOperationArg) (*proto.FileLocationInf
 }
 
 func (nn *NameNode) GetFileLocation(filePath string, replicaNum int32) (*proto.FileLocationInfo, error) {
-	if filePath == "" {
+	if filePath == "" || filePath == "/" {
 		return nil, common.ErrPathFormatError
 	}
 	nn.mux.RLock()
 	defer nn.mux.RUnlock()
-	fileMeta, err := nn.dataStore.GetFileMeta(filePath)
+	// filePath : /usr/app/example.txt
+	fileMeta, err := nn.metaStore.GetFileMeta(filePath)
 	if err != nil {
 		fmt.Printf("NameNode rev GetFile(%s), err:%v;\n", filePath, err)
 		return nil, err
@@ -130,34 +136,41 @@ func (nn *NameNode) GetFileLocation(filePath string, replicaNum int32) (*proto.F
 	if fileMeta.IsDir {
 		return nil, common.ErrFileFormatError
 	}
+	// 获得文件块信息;
 	fmt.Printf("NameNode rev GetFile(%s), dataStore.FileLocationInfo:%v;\n", filePath, fileMeta.Chunks)
-	fmt.Printf("NameNode  nn.chunkLocations: %v; \n", nn.chunkLocation)
+	// 文件块信息映射 dataNode-1 地址;
+	//fmt.Printf("NameNode.chunkLocations: %v; \n", nn.chunkLocation)
 	fileLocationInfo := &proto.FileLocationInfo{}
-	fileLocationInfo.FileSize = fileMeta.FileSize
-	fileLocationInfo.ChunkNum = int64(len(fileMeta.Chunks))
+	fileLocationInfo.FileSize = fileMeta.FileSize           // 文件总大小;
+	fileLocationInfo.ChunkNum = int64(len(fileMeta.Chunks)) // 文件几个块;
 	chunkInfos := make([]*proto.ChunkInfo, 0)
-	for _, chunkMeta := range fileMeta.Chunks {
+	// 开始遍历文件块信息, 来获得对应的dataNode信息;
+	for _, chunkMeta := range fileMeta.Chunks { // 可能此时的chunks; 只有1/3,其余的还没上传;
+		// 获得文件块信息对应的dataNode信息;同一个块,返回多个dataNode信息;
 		if dataNodes, ok := nn.chunkLocation[chunkMeta.ChunkName]; ok {
-			address := make([]string, 0)
+			addresses := make([]string, 0)
+			// 每个文件块都存在于多数dataNode上,需要在线的dataNode;
 			for _, dataNode := range dataNodes {
 				if nodeInfo, ok := nn.dataNodeInfos[dataNode.DataNodeAddress]; ok {
 					if nodeInfo.Status == datanodeUp {
-						address = append(address, dataNode.DataNodeAddress)
+						addresses = append(addresses, dataNode.DataNodeAddress)
 					}
 				}
 			}
+
+			// 找到在线dataNode后, 封装文件chunkInfo;
 			chunkInfos = append(chunkInfos, &proto.ChunkInfo{
 				ChunkId:           chunkMeta.ChunkId,
 				FilePathName:      filePath,
 				FilePathChunkName: chunkMeta.ChunkName,
-				DataNodeAddress:   &proto.DataNodeChain{DataNodeAddress: address},
+				DataNodeAddress:   &proto.DataNodeChain{DataNodeAddress: addresses},
 			})
 		} else {
+			// 相关chunk没有找到, 说明 dataNode-1 还没提交相关文件块信息;
 			return nil, common.ErrChunkReplicaNotFound
 		}
-		//return nil, common.ErrChunkReplicaNotFound
 	}
-	fileLocationInfo.Chunks = chunkInfos
+	fileLocationInfo.Chunks = chunkInfos // 可能为空;
 	fmt.Printf("NameNode rev GetFile(%s), return FileLocationInfo:%v;\n", filePath, fileLocationInfo)
 	return fileLocationInfo, nil
 }
@@ -183,7 +196,7 @@ func (nn *NameNode) DeleteFile(arg *proto.FileOperationArg) (*proto.DeleteFileRe
 	}
 	// /root   / root
 	// /tt.txt / ttt.txt
-	fileName, path := splitFileNamePath(pathFileName)
+	fileName, path := common.SplitFileNamePath(pathFileName)
 	parentNode, err := nn.checkPathOrCreate(path, false)
 	if err != nil {
 		return nil, err
@@ -192,42 +205,57 @@ func (nn *NameNode) DeleteFile(arg *proto.FileOperationArg) (*proto.DeleteFileRe
 	if meta == nil {
 		return nil, common.ErrFileNotFound
 	}
-	// 空目录
-	delete(parentNode.ChildList, fileName)
-	nn.dataStore.PutFileMeta(parentNode.KeyFileName, parentNode)
+	// 1. 删除的是文件夹类型, 需要进一步判断是否是空目录;
 	if meta.IsDir {
-		getFile, err := nn.dataStore.GetFileMeta(meta.KeyFileName)
+		getFile, err := nn.metaStore.GetFileMeta(meta.KeyFileName)
 		if err != nil {
 			return nil, err
 		}
 		if len(getFile.ChildList) > 0 {
 			return nil, common.ErrCanNotDelNotEmptyDir
 		} else {
-			err = nn.dataStore.Delete(meta.KeyFileName)
+			err = nn.metaStore.Delete(meta.KeyFileName)
+			delete(parentNode.ChildList, fileName)
+			nn.metaStore.PutFileMeta(parentNode.KeyFileName, parentNode)
 		}
-	} else {
-		meta, err = nn.dataStore.GetFileMeta(meta.KeyFileName) // 获取最新的 dataNode 的上传信息
-		for _, chunk := range meta.Chunks {
-			replicaMetas := nn.chunkLocation[chunk.ChunkName]
-			for _, replicaMeta := range replicaMetas {
-				nodeInfo := nn.dataNodeInfos[replicaMeta.DataNodeAddress]
-				nodeInfo.trashChunkNames = append(nodeInfo.trashChunkNames, chunk.ChunkName)
-				nodeTrashKey := GetDataNodeTrashKey(nodeInfo.Address)
-				err = nn.taskStore.PutTrashs(nodeTrashKey, nodeInfo.trashChunkNames)
-				if err != nil {
-					fmt.Printf("NameNode delete chunk:%s, replicaIP:%s err:%v ;\n", chunk.ChunkName, replicaMeta.DataNodeAddress, err)
+	} else { // 2. 删除的是一个文件, 那么就需要删除文件块信息,并下发给dataNode删除任务;
+		meta, err = nn.metaStore.GetFileMeta(meta.KeyFileName) // 尝试获取最新的 dataNode-1 的上传信息;
+		if err != nil {
+			return nil, err
+		}
+		go func() { // 新协程完成删除 文件块信息;
+			for _, chunk := range meta.Chunks {
+				// 获得这个文件块的所在的几个dataNode信息;
+				replicaMetas := nn.chunkLocation[chunk.ChunkName]
+				for _, replicaMeta := range replicaMetas { // 当前 chunk 的几个副本;
+					nodeInfo := nn.dataNodeInfos[replicaMeta.DataNodeAddress]
+					nodeInfo.trashChunkNames = append(nodeInfo.trashChunkNames, chunk.ChunkName)
+					nodeTrashKey := GetDataNodeTrashKey(nodeInfo.Address)
+					// 持久化dataNode的删除任务; 会不会出现覆盖之前的未执行的任务? 不会, 每次保存的都是全量任务;
+					// dataNode-1 执行完任务后, 提交后, nameNode剔除掉删除任务;
+					err = nn.taskStore.PutTrashes(nodeTrashKey, nodeInfo.trashChunkNames)
+					if err != nil {
+						fmt.Printf("NameNode for PutTrashes delete chunk:%s, replicaIP:%s err:%v ;\n",
+							chunk.ChunkName, replicaMeta.DataNodeAddress, err)
+						return
+					}
+					fmt.Printf("NameNode for PutTrashes delete chunk:%s, replica:%s ;\n", chunk.ChunkName, replicaMeta.DataNodeAddress)
 				}
-				fmt.Printf("NameNode delete chunk:%s, replica:%s ;\n", chunk.ChunkName, replicaMeta.DataNodeAddress)
+				// 删除 <chunk*,dataNode-1>内存映射;
+				delete(nn.chunkLocation, chunk.ChunkName)
+				// 删除 <dataNode-1,chunks> 内存映射;
 			}
-			delete(nn.chunkLocation, chunk.ChunkName)
-		}
-		err = nn.dataStore.Delete(meta.KeyFileName)
-		fmt.Printf("NameNode dataStore.Delete(%s);\n", meta.KeyFileName)
+		}()
+		// 主协程完成 删除文件信息;
+		err = nn.metaStore.Delete(meta.KeyFileName)
+		delete(parentNode.ChildList, fileName)
+		nn.metaStore.PutFileMeta(parentNode.KeyFileName, parentNode)
+		// fmt.Printf("NameNode dataStore.Delete(%s);\n", meta.KeyFileName)
 		if err != nil {
 			fmt.Printf("NameNode dataStore.Delete(%s), err:%v ;\n", meta.KeyFileName, err)
 		}
 	}
-	fmt.Printf("NameNode rev DeleteFile(%s);\n", pathFileName)
+	fmt.Printf("NameNode.DeleteFile(%s);\n", pathFileName)
 	return nil, err
 }
 
@@ -235,7 +263,7 @@ func (nn *NameNode) ListDir(arg *proto.FileOperationArg) (*proto.DirMetaList, er
 	nn.mux.Lock()
 	defer nn.mux.Unlock()
 	fileName := arg.GetFileName()
-	fileMeta, err := nn.dataStore.GetFileMeta(fileName)
+	fileMeta, err := nn.metaStore.GetFileMeta(fileName)
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +296,7 @@ func (nn *NameNode) Mkdir(arg *proto.FileOperationArg) (*proto.MkdirReply, error
 	// path: [user,app]
 	// fileName: example.txt
 	pathFileName := arg.GetFileName()
-	fileName, path := splitFileNamePath(pathFileName)
+	fileName, path := common.SplitFileNamePath(pathFileName)
 	parentNode, err := nn.checkPathOrCreate(path, true)
 	if err != nil {
 		return nil, err
@@ -284,13 +312,11 @@ func (nn *NameNode) Mkdir(arg *proto.FileOperationArg) (*proto.MkdirReply, error
 		ChildList:   make(map[string]*FileMeta),
 	}
 	parentNode.ChildList[fileName] = fileMeta
-	// todo 等待DataNode commitChunk 后再持久化
-	// todo 不等待DataNode commitChunk 后再持久化,先持久化
-	err = nn.dataStore.PutFileMeta(fileMeta.KeyFileName, fileMeta)
+	err = nn.metaStore.PutFileMeta(fileMeta.KeyFileName, fileMeta)
 	if err != nil {
 		return nil, err
 	}
-	err = nn.dataStore.PutFileMeta(parentNode.KeyFileName, parentNode)
+	err = nn.metaStore.PutFileMeta(parentNode.KeyFileName, parentNode)
 	if err != nil {
 		return nil, err
 	}
@@ -302,15 +328,21 @@ func (nn *NameNode) ReName(arg *proto.FileOperationArg) (*proto.ReNameReply, err
 	defer nn.mux.Unlock()
 	oldKeyFilePathName := arg.GetFileName()
 	newKeyFilePathName := arg.GetNewFileName()
-	fileMeta, err := nn.dataStore.GetFileMeta(oldKeyFilePathName)
+	fileMeta, err := nn.metaStore.GetFileMeta(oldKeyFilePathName)
 	if err != nil {
 		return nil, err
 	}
 	if fileMeta == nil {
 		return nil, common.ErrFileNotFound
 	}
-	oldFileName, path := splitFileNamePath(oldKeyFilePathName)
-	newFileName, path := splitFileNamePath(newKeyFilePathName)
+	if !fileMeta.IsDir {
+		// 1. 修改文件名;
+		// 2. 所有的副本的文件名得更改;
+		// 3. 所有的保存此副本的dataNode得更改其文件chunk名字;
+		return nil, common.ErrNotSupported
+	}
+	oldFileName, path := common.SplitFileNamePath(oldKeyFilePathName)
+	newFileName, _ := common.SplitFileNamePath(newKeyFilePathName)
 	parentNode, err := nn.checkPathOrCreate(path, false)
 	if err != nil {
 		return nil, err
@@ -319,11 +351,11 @@ func (nn *NameNode) ReName(arg *proto.FileOperationArg) (*proto.ReNameReply, err
 	fileMeta.KeyFileName = newKeyFilePathName
 	parentNode.ChildList[newFileName] = fileMeta
 	delete(parentNode.ChildList, oldFileName)
-	err = nn.dataStore.PutFileMeta(parentNode.KeyFileName, parentNode)
+	err = nn.metaStore.PutFileMeta(parentNode.KeyFileName, parentNode)
 	if err != nil {
 		return nil, err
 	}
-	err = nn.dataStore.PutFileMeta(fileMeta.KeyFileName, fileMeta)
+	err = nn.metaStore.PutFileMeta(fileMeta.KeyFileName, fileMeta)
 	if err != nil {
 		return nil, err
 	}
@@ -335,8 +367,8 @@ func (nn *NameNode) ReName(arg *proto.FileOperationArg) (*proto.ReNameReply, err
 // path: /user/test          /user/app            /user/app/local/yy  /   /root
 func (nn *NameNode) checkPathOrCreate(path string, notCreate bool) (*FileMeta, error) {
 	if path == "/" {
-		fileMeta, err := nn.dataStore.GetFileMeta(path)
-		if err == leveldb.ErrNotFound && notCreate {
+		fileMeta, err := nn.metaStore.GetFileMeta(path)
+		if errors.Is(err, DBcommon.ErrKeyNotFound) && notCreate {
 			fileMeta := &FileMeta{
 				IsDir:       true,
 				ChildList:   make(map[string]*FileMeta),
@@ -344,14 +376,14 @@ func (nn *NameNode) checkPathOrCreate(path string, notCreate bool) (*FileMeta, e
 				FileName:    path,
 				FileSize:    0,
 			}
-			err = nn.dataStore.PutFileMeta(path, fileMeta)
+			err = nn.metaStore.PutFileMeta(path, fileMeta)
 			if err != nil {
 				return nil, err
 			}
 		}
 		return fileMeta, err
 	}
-	rootFileMeta, _ := nn.dataStore.GetFileMeta("/")
+	rootFileMeta, _ := nn.metaStore.GetFileMeta("/")
 	if rootFileMeta == nil {
 		rootFileMeta = &FileMeta{
 			IsDir:       true,
@@ -360,7 +392,7 @@ func (nn *NameNode) checkPathOrCreate(path string, notCreate bool) (*FileMeta, e
 			FileName:    "/",
 			FileSize:    0,
 		}
-		if err := nn.dataStore.PutFileMeta(rootFileMeta.KeyFileName, rootFileMeta); err != nil {
+		if err := nn.metaStore.PutFileMeta(rootFileMeta.KeyFileName, rootFileMeta); err != nil {
 			return nil, err
 		}
 	}
@@ -380,16 +412,16 @@ func (nn *NameNode) checkPathOrCreate(path string, notCreate bool) (*FileMeta, e
 					FileSize:    0,
 				}
 				// KeyFileName: /app  value: app
-				nn.dataStore.PutFileMeta(fileMeta.KeyFileName, fileMeta)
+				nn.metaStore.PutFileMeta(fileMeta.KeyFileName, fileMeta)
 				rootFileMeta.ChildList[dir] = fileMeta
 				fileQueue = append(fileQueue, fileMeta)
-				nn.dataStore.PutFileMeta(rootFileMeta.KeyFileName, rootFileMeta)
+				nn.metaStore.PutFileMeta(rootFileMeta.KeyFileName, rootFileMeta)
 				rootFileMeta = fileMeta
 				continue
 			}
 			return nil, common.ErrNotDir
 		}
-		fileMeta, err := nn.dataStore.GetFileMeta(file.KeyFileName)
+		fileMeta, err := nn.metaStore.GetFileMeta(file.KeyFileName)
 		if err != nil {
 			return nil, err
 		}
@@ -419,25 +451,26 @@ func (nn *NameNode) choseDataNode(num int) ([]*DataNodeInfo, error) {
 	return result[:num], nil
 }
 
+func (nn *NameNode) Close() error {
+	if nn.metaStore != nil {
+		err := nn.metaStore.close()
+		if err != nil {
+			return err
+		}
+	}
+	if nn.taskStore != nil {
+		err := nn.taskStore.close()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func CreatKeyFileName(parentFileName, dir string) string {
 	if parentFileName == "/" {
 		return parentFileName + dir
 	} else {
 		return parentFileName + "/" + dir
 	}
-}
-
-func splitFileNamePath(fileNamePath string) (fileName, path string) {
-	index := strings.LastIndex(fileNamePath, "/")
-	if index < 0 {
-		return "", ""
-	}
-	path = fileNamePath[:index]
-	if path == "" {
-		path = "/"
-		fileName = fileNamePath[index+1:]
-		return
-	}
-	fileName = fileNamePath[index+1:]
-	return
 }

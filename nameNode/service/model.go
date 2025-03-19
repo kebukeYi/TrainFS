@@ -4,10 +4,10 @@ type datanodeStatus string
 type replicaState string
 
 type FileMeta struct {
-	KeyFileName string
-	FileName    string
+	KeyFileName string // /usr/app
+	FileName    string // app
 	FileSize    int64
-	IsDir       bool
+	IsDir       bool // true or false
 	ChildList   map[string]*FileMeta
 	Chunks      []*ChunkMeta
 	ChunkNum    int64

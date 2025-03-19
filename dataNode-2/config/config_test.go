@@ -5,8 +5,7 @@ import (
 	"testing"
 )
 
-func TestGetNameNodeConfig(t *testing.T) {
-	// fileName := "nameNode_config.yml"
+func TestGetDataNodeConfig(t *testing.T) {
 	conf := GetDataNodeConfig()
 	fmt.Println(conf)
 }

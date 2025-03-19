@@ -8,9 +8,9 @@ import (
 
 func main() {
 	client := cli.NewClient()
-	//localPath := "F:\\yyyyy.jpg"
-	localPathGet := "F:\\getappyyyyy.jpg"
-	//localPathGet := "F:\\getlocalyyyyy.jpg"
+	//localPath := "F:\\"
+	localPathGet := "F:\\"
+	//localPathGet := "F:\\"
 	//remotePath := "/user/app/yyyyy.data"
 	remotePath := "/user/local/yyyyy.data"
 	//client.PutFile(localPath, remotePath)
