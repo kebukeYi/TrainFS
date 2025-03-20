@@ -4,4 +4,5 @@ DataNode:
   DataNodeId: 4
   HeartbeatInterval: 6000
   HeartBeatRetry: 3
-  DataDir: /usr/projects_gen_data/goprogendata/trainfsdata/test/datanode
+#  DataDir: /usr/projects_gen_data/goprogendata/trainfsdata/test/datanode
+  DataDir: F:\ProjectsData\golang\TrainFS\DataNode

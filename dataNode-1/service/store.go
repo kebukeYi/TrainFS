@@ -33,7 +33,8 @@ func OpenStoreManager(path string) *StoreManger {
 func (m *StoreManger) PutChunkInfos(key string, value map[string]*proto.ChunkInfo) error {
 	data, err := chunkInfos2bytes(value)
 	if data != nil {
-		m.db.Set(model.Entry{Key: []byte(key), Value: data})
+		entry := model.Entry{Key: []byte(key), Value: data}
+		m.db.Set(&entry)
 		if err != nil {
 			return err
 		}
@@ -43,7 +44,7 @@ func (m *StoreManger) PutChunkInfos(key string, value map[string]*proto.ChunkInf
 
 func (m *StoreManger) GetChunkInfos(key string) (map[string]*proto.ChunkInfo, error) {
 	entry, err := m.db.Get([]byte(key))
-	if err != nil || entry.Version == -1 {
+	if err != nil || entry == nil {
 		if errors.Is(err, DBCommon.ErrKeyNotFound) {
 			return make(map[string]*proto.ChunkInfo), nil
 		}
@@ -57,7 +58,8 @@ func (m *StoreManger) GetChunkInfos(key string) (map[string]*proto.ChunkInfo, er
 }
 
 func (m *StoreManger) Put(key string, value []byte) error {
-	err := m.db.Set(model.Entry{Key: []byte(key), Value: value})
+	entry := model.Entry{Key: []byte(key), Value: value}
+	err := m.db.Set(&entry)
 	if err != nil {
 		return err
 	}
@@ -66,7 +68,7 @@ func (m *StoreManger) Put(key string, value []byte) error {
 
 func (m *StoreManger) Get(key string) ([]byte, error) {
 	value, err := m.db.Get([]byte(key))
-	if err != nil || value.Version == -1 {
+	if err != nil || value == nil {
 		return nil, err
 	}
 	return value.Value, nil
@@ -93,7 +95,8 @@ func (m *StoreManger) Close() error {
 func (m *StoreManger) PutReplications(key string, value []*Replication) error {
 	data, err := replications2bytes(value)
 	if data != nil {
-		err = m.db.Set(model.Entry{Key: []byte(key), Value: data})
+		entry := model.Entry{Key: []byte(key), Value: data}
+		err = m.db.Set(&entry)
 		if err != nil {
 			return err
 		}
@@ -103,7 +106,7 @@ func (m *StoreManger) PutReplications(key string, value []*Replication) error {
 
 func (m *StoreManger) GetReplications(key string) ([]*Replication, error) {
 	data, err := m.db.Get([]byte(key))
-	if err != nil || data.Version == -1 {
+	if err != nil || data == nil {
 		if errors.Is(err, DBCommon.ErrKeyNotFound) {
 			return make([]*Replication, 0), nil
 		}
@@ -119,7 +122,8 @@ func (m *StoreManger) GetReplications(key string) ([]*Replication, error) {
 func (m *StoreManger) PutTrashes(key string, value []string) error {
 	data, err := strings2bytes(value)
 	if data != nil {
-		err := m.db.Set(model.Entry{Key: []byte(key), Value: data})
+		entry := model.Entry{Key: []byte(key), Value: data}
+		err = m.db.Set(&entry)
 		if err != nil {
 			return err
 		}
@@ -129,7 +133,7 @@ func (m *StoreManger) PutTrashes(key string, value []string) error {
 
 func (m *StoreManger) GetTrashes(key string) ([]string, error) {
 	value, err := m.db.Get([]byte(key))
-	if err != nil || value.Version == -1 {
+	if err != nil || value == nil {
 		if errors.Is(err, DBCommon.ErrKeyNotFound) {
 			return make([]string, 0), nil
 		}
@@ -203,14 +207,12 @@ func bytes2Strings(value []byte) ([]string, error) {
 	if value == nil || len(value) == 0 {
 		return nil, common.ErrInputEmpty
 	}
-	// 反序列化
 	var strings []string
 	err := json.Unmarshal(value, &strings)
 	if err != nil {
 		fmt.Printf("bytes2Strings[%v] Unmarshal error:%s \n", value, err)
 		return nil, err
 	}
-	// 输出反序列化后的字符串切片
 	return strings, nil
 }
 
@@ -223,6 +225,5 @@ func strings2bytes(value []string) ([]byte, error) {
 		fmt.Printf("strings2bytes[%v] Marshal error:%s \n", value, err)
 		return nil, err
 	}
-	// 输出序列化后的JSON字符串
 	return jsonBytes, nil
 }

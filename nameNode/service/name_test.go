@@ -74,18 +74,31 @@ func TestSplitFileNamePath(t *testing.T) {
 		{"", "", ""},
 		{"/", "", "/"},
 		{"/user/app", "app", "/user"},
-		{"file.txt", "file.txt", ""},
+		//{"file.txt", "file.txt", ""}, // error input
 		{"path/to/file.txt", "file.txt", "path/to"},
 		{"/path/to/file.txt", "file.txt", "/path/to"},
 		{"/file.txt", "file.txt", "/"},
 		{"/app", "app", "/"},
+
+		{"\\root\\app\\y.jpg", "y.jpg", "\\root\\app"},
+
+		//{"", "", ""},
+		//{"\\", "", "\\"},
+		//{"\\user\\app", "app", "\\user"},
+		////{"file.txt", "file.txt", ""}, // error input
+		//{"path\\to\\file.txt", "file.txt", "path\\to"},
+		//{"\\path\\to\\file.txt", "file.txt", "\\path\\to"},
+		//{"\\file.txt", "file.txt", "\\"},
+		//{"\\app", "app", "\\"},
 	}
 
 	for _, test := range tests {
 		fileName, path := common.SplitFileNamePath(test.fileNamePath)
-		fmt.Printf("fileName:%s; path:%s \n", fileName, path)
+		fmt.Printf("fileName:%s;expectedFile:%s; path:%s; expectedPath:%s \n",
+			fileName, test.expectedFile, path, test.expectedPath)
 		//if fileName != test.expectedFile || path != test.expectedPath {
-		//	t.Errorf("splitFileNamePath(%s) = (%s, %s), expected (%s, %s)", test.fileNamePath, fileName, path, test.expectedFile, test.expectedPath)
+		//	t.Errorf("splitFileNamePath(%s) = (%s, %s), expected (%s, %s)",
+		//		test.fileNamePath, fileName, path, test.expectedFile, test.expectedPath)
 		//}
 	}
 }

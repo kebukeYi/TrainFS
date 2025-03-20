@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/kebukeYi/TrainDB/common"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -74,6 +75,20 @@ func GetFileNameFromChunkName(fileChunkName string) string {
 	}
 	return fileChunkName[:indexAny-6]
 }
+func SplitClientFileNamePath(fileNamePath string) (fileName, path string) {
+	index := strings.LastIndex(fileNamePath, string(filepath.Separator))
+	if index < 0 {
+		return "", ""
+	}
+	path = fileNamePath[:index]
+	if path == "" {
+		path = string(filepath.Separator)
+		fileName = fileNamePath[index+1:]
+		return
+	}
+	fileName = fileNamePath[index+1:]
+	return
+}
 
 func SplitFileNamePath(fileNamePath string) (fileName, path string) {
 	index := strings.LastIndex(fileNamePath, "/")
@@ -97,7 +112,7 @@ func ClearDir(dir string) {
 			common.Panic(err)
 		}
 	}
-	err = os.Mkdir(dir, os.ModePerm)
+	err = os.MkdirAll(dir, os.ModePerm)
 	if err != nil {
 		_ = fmt.Sprintf("create dir %s failed", dir)
 	}

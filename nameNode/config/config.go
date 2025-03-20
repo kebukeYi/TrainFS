@@ -5,8 +5,7 @@ import (
 	"gopkg.in/yaml.v2"
 	"log"
 	"os"
-	"path"
-	"runtime"
+	"path/filepath"
 )
 
 type NameNodeConfig struct {
@@ -62,26 +61,19 @@ func inits() {
 		log.Fatal("fail to unmarshal yaml :", err)
 	}
 	dataDir := conf.NameNode.DataDir
-	switch runtime.GOOS {
-	case "windows":
-		conf.NameNode.DataDir = dataDir + conf.NameNode.NameNodeId + "\\data"
-		conf.NameNode.TaskDir = dataDir + conf.NameNode.NameNodeId + "\\task"
-	case "linux":
-		conf.NameNode.DataDir = path.Join(dataDir+conf.NameNode.NameNodeId, "data")
-		conf.NameNode.TaskDir = path.Join(dataDir+conf.NameNode.NameNodeId, "task")
-	default:
-		conf.NameNode.DataDir = path.Join(dataDir+conf.NameNode.NameNodeId, "data")
-		conf.NameNode.TaskDir = path.Join(dataDir+conf.NameNode.NameNodeId, "task")
+
+	conf.NameNode.DataDir = filepath.Join(dataDir+conf.NameNode.NameNodeId, "data")
+	conf.NameNode.TaskDir = filepath.Join(dataDir+conf.NameNode.NameNodeId, "task")
+
+	err = os.MkdirAll(conf.NameNode.DataDir, os.ModePerm)
+	if err != nil {
+		log.Fatal("fail to open nameNodeData dir  :", err)
+	}
+	err = os.MkdirAll(conf.NameNode.TaskDir, os.ModePerm)
+	if err != nil {
+		log.Fatal("fail to open nameNodeData dir  :", err)
 	}
 
-	err = os.MkdirAll(conf.NameNode.DataDir, 0777)
-	if err != nil {
-		log.Fatal("fail to open nameNodeData dir  :", err)
-	}
-	err = os.MkdirAll(conf.NameNode.TaskDir, 0777)
-	if err != nil {
-		log.Fatal("fail to open nameNodeData dir  :", err)
-	}
 	model := conf.NameNode.Model
 	if model == Single {
 		return

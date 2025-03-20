@@ -5,8 +5,7 @@ import (
 	"gopkg.in/yaml.v2"
 	"log"
 	"os"
-	"path"
-	"runtime"
+	"path/filepath"
 )
 
 type DataNodeConfig struct {
@@ -54,20 +53,9 @@ func inits() {
 		log.Fatal("fail to unmarshal yaml :", err)
 	}
 	dataDir := conf.DataNode.DataDir
-	switch runtime.GOOS {
-	case "windows":
-		conf.DataNode.DataDir = dataDir + conf.DataNode.DataNodeId + "//data"
-		conf.DataNode.TaskDir = dataDir + conf.DataNode.DataNodeId + "//task"
-		conf.DataNode.MetaDir = dataDir + conf.DataNode.DataNodeId + "//meta"
-	case "linux":
-		conf.DataNode.DataDir = path.Join(dataDir+conf.DataNode.DataNodeId, "data")
-		conf.DataNode.TaskDir = path.Join(dataDir+conf.DataNode.DataNodeId, "task")
-		conf.DataNode.MetaDir = path.Join(dataDir+conf.DataNode.DataNodeId, "meta")
-	default:
-		conf.DataNode.DataDir = path.Join(dataDir+conf.DataNode.DataNodeId, "data")
-		conf.DataNode.TaskDir = path.Join(dataDir+conf.DataNode.DataNodeId, "task")
-		conf.DataNode.MetaDir = path.Join(dataDir+conf.DataNode.DataNodeId, "meta")
-	}
+	conf.DataNode.DataDir = filepath.Join(dataDir+conf.DataNode.DataNodeId, "data")
+	conf.DataNode.TaskDir = filepath.Join(dataDir+conf.DataNode.DataNodeId, "task")
+	conf.DataNode.MetaDir = filepath.Join(dataDir+conf.DataNode.DataNodeId, "meta")
 
 	err = os.MkdirAll(conf.DataNode.DataDir, 0777)
 	err = os.MkdirAll(conf.DataNode.TaskDir, 0777)

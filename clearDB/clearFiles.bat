@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 :: 指定要清理的目录列表
-set directories=F:\TrainFS\DataNode\DataNode1 F:\TrainFS\DataNode\DataNode2 F:\TrainFS\DataNode\DataNode3 F:\TrainFS\NameNode1 F:\TrainFS\NameNode2
+set directories=F:\ProjectsData\golang\TrainFS\DataNode1 F:\ProjectsData\golang\TrainFS\DataNode2 F:\ProjectsData\golang\TrainFS\DataNode3 F:\ProjectsData\golang\TrainFS\NameNode1 F:\ProjectsData\golang\TrainFS\NameNode2
 
 :: 遍历每个目录并删除其中的所有文件
 for %%d in (%directories%) do (

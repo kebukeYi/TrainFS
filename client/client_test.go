@@ -68,8 +68,14 @@ func TestPutFile(t *testing.T) {
 	// 23_2MB.jpg  810KB.png   200KB.png   1440KB.jpg
 	// /usr/projects_gen_data/goprogendata/trainfsdata/test/client/get
 	// /usr/projects_gen_data/goprogendata/trainfsdata/test/client/put
-	localFilePath := "/usr/projects_gen_data/goprogendata/trainfsdata/test/client/put/810KB.png" // 912KB / 400 = 3块
 
+	// linux
+	//localFilePath := "/usr/projects_gen_data/goprogendata/trainfsdata/test/client/put/810KB.png" // 912KB / 400 = 3块
+
+	// windows
+	localFilePath := "F:\\ProjectsData\\golang\\TrainFS\\client\\put\\y.jpg" // 992KB / 400 = 3块
+
+	// nameNode`s remotePath format linux
 	remotePath1 := "/root/app"
 	//remotePath2 := "/root/local"
 	//remotePath3 := "/root/mbn"
@@ -79,7 +85,7 @@ func TestPutFile(t *testing.T) {
 		client.PutFile(localFilePath, path)
 	}
 	fmt.Printf("=======================================================\n")
-	time.Sleep(time.Second * 3)
+	time.Sleep(time.Second * 2)
 	for _, path := range remotePaths {
 		dirMetaList, err := client.ListDir(path)
 		if err != nil {
@@ -89,9 +95,16 @@ func TestPutFile(t *testing.T) {
 		fmt.Println(dirMetaList.String())
 	}
 	fmt.Printf("=======================================================\n")
-	time.Sleep(time.Second * 3)
-	localPath2 := "/usr/projects_gen_data/goprogendata/trainfsdata/test/client/get2"
-	remoteFilePath2 := "/root/app/810KB.png"
+	time.Sleep(time.Second * 1)
+	// linux client get path
+	//localPath2 := "/usr/projects_gen_data/goprogendata/trainfsdata/test/client/get2"
+
+	// windows client get path
+	localPath2 := "F:\\ProjectsData\\golang\\TrainFS\\client\\get2"
+
+	// nameNode`s remotePath format linux
+	//remoteFilePath2 := "/root/app/810KB.png"
+	remoteFilePath2 := "/root/app/y.jpg"
 	file, err := client.GetFile(localPath2, remoteFilePath2)
 	if err != nil {
 		fmt.Printf("getFile(%s) ,err:%s \n", remoteFilePath2, err)
@@ -102,32 +115,29 @@ func TestPutFile(t *testing.T) {
 
 func TestGetFile(t *testing.T) {
 	client := cli.NewClient()
-	localPath1 := "/usr/projects_gen_data/goprogendata/trainfsdata/test/client/get1"
-	localPath2 := "/usr/projects_gen_data/goprogendata/trainfsdata/test/client/get2"
-	localPath3 := "/usr/projects_gen_data/goprogendata/trainfsdata/test/client/get3"
-	localPaths := make([]string, 0)
-	localPaths = append(localPaths, localPath1, localPath2, localPath3)
-	remoteFilePath1 := "/root/app/810KB.png"
-	//remoteFilePath2 := "/root/local/810KB.png"
-	//remoteFilePath3 := "/root/mbn/810KB.png"
-	remoteFilePaths := make([]string, 0)
-	//remoteFilePaths = append(remoteFilePaths, remoteFilePath1, remoteFilePath2, remoteFilePath3)
-	remoteFilePaths = append(remoteFilePaths, remoteFilePath1)
-	for i, path := range remoteFilePaths {
-		file, err := client.GetFile(localPaths[i], path)
-		if err != nil {
-			fmt.Printf("getFile(%s) ,err:%s \n", path, err)
-			continue
-		}
-		fmt.Println(file.Name())
-		file.Close()
+	// linux client get path
+	//localPath1 := "/usr/projects_gen_data/goprogendata/trainfsdata/test/client/get1"
+
+	// windows client get path
+	localPath1 := "F:\\ProjectsData\\golang\\TrainFS\\client\\get1"
+
+	// nameNode`s remotePath format linux
+	//remoteFilePath1 := "/root/app/810KB.png"
+	remoteFilePath1 := "/root/app/y.jpg"
+	file, err := client.GetFile(localPath1, remoteFilePath1)
+	if err != nil {
+		fmt.Printf("getFile(%s) ,err:%s \n", remoteFilePath1, err)
+		return
 	}
+	fmt.Println(file.Name())
+	file.Close()
 }
 
 func TestDelete(t *testing.T) {
 	client := cli.NewClient()
 	remoteFilePaths := make([]string, 0)
-	remoteFilePath1 := "/root/app/810KB.png"
+	// nameNode`s remotePath format linux
+	remoteFilePath1 := "/root/app/y.jpg"
 	//remotePath2 := "/root/local/y.data"
 	//remotePath3 := "/root/mbn"        // 测试删除目录
 	//remotePath5 := "/not_root"        // 测试删除不存在的目录
@@ -140,7 +150,7 @@ func TestDelete(t *testing.T) {
 		}
 	}
 	fmt.Printf("=======================================================\n")
-	time.Sleep(time.Second * 3)
+	time.Sleep(time.Second * 2)
 	dirMetaList, err := client.ListDir("/root/app")
 	if err != nil {
 		fmt.Printf("client.ListDir err:%v \n", err)
@@ -149,8 +159,16 @@ func TestDelete(t *testing.T) {
 	fmt.Printf("dirMetaList: %v \n", dirMetaList.String())
 	fmt.Printf("=======================================================\n")
 	time.Sleep(time.Second * 2)
-	localPath4 := "/usr/projects_gen_data/goprogendata/trainfsdata/test/client/get4"
-	remoteFilePath4 := "/root/app/810KB.png"
+
+	// windows client get path
+	//localPath4 := "/usr/projects_gen_data/goprogendata/trainfsdata/test/client/get4"
+
+	// linux client get path
+	localPath4 := "F:\\ProjectsData\\golang\\TrainFS\\client\\get4"
+
+	// nameNode`s remotePath format linux
+	//remoteFilePath4 := "/root/app/810KB.png"
+	remoteFilePath4 := "/root/app/y.jpg"
 	getFile, err := client.GetFile(localPath4, remoteFilePath4)
 	if err != nil {
 		fmt.Printf("client.GetFile(%s) err:%v \n", remoteFilePath4, err)

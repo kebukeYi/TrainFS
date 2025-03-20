@@ -38,7 +38,8 @@ func (m *TaskStoreManger) PutReplications(key string, value []*Replication) erro
 		return err
 	}
 	if data != nil {
-		err = m.db.Set(model.NewEntry([]byte(key), data))
+		entry := model.NewEntry([]byte(key), data)
+		err = m.db.Set(&entry)
 		if err != nil {
 			return err
 		}
@@ -76,7 +77,8 @@ func (m *TaskStoreManger) PutTrashes(key string, value []string) error {
 		return err
 	}
 	if data != nil {
-		err = m.db.Set(model.NewEntry([]byte(key), data))
+		entry := model.NewEntry([]byte(key), data)
+		err = m.db.Set(&entry)
 		if err != nil {
 			return err
 		}
@@ -86,7 +88,7 @@ func (m *TaskStoreManger) PutTrashes(key string, value []string) error {
 
 func (m *TaskStoreManger) GetTrashes(key string) ([]string, error) {
 	data, err := m.db.Get([]byte(key))
-	if err != nil || data.Version == -1 {
+	if err != nil || data == nil {
 		if errors.Is(err, DBcommon.ErrKeyNotFound) {
 			return make([]string, 0), nil
 		}

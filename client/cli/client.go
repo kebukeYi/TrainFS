@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 )
@@ -47,8 +48,8 @@ func (c *Client) PutFile(localFilePath string, remotePath string) {
 	} else {
 		chunkNum = int64(len(fileData)) / chunkSize
 	}
-	fileName, _ := common.SplitFileNamePath(localFilePath)
-	remoteFilePath := filepath.Join(remotePath, fileName)
+	fileName, _ := common.SplitClientFileNamePath(localFilePath)
+	remoteFilePath := path.Join(remotePath, fileName)
 	err = c.doWrite(remoteFilePath, int64(len(fileData)), fileData, chunkSize, chunkNum)
 	if err != nil {
 		fmt.Printf("doWrite file error: %v\n", err)

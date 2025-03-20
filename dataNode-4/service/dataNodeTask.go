@@ -40,7 +40,7 @@ func (dataNode *DataNode) Register() (bool, error) {
 	return true, nil
 }
 
-// ChunkReportTask 上报自身存储chunk信息任务;
+// ChunkReportTask 上报自身存储全量chunk信息;
 func (dataNode *DataNode) ChunkReportTask() {
 	nameServiceClient, err := dataNode.getGrpcNameNodeServerConn(dataNode.Config.NameNodeHost)
 	if err != nil {

@@ -2,8 +2,9 @@ NameNode:
   Host: 127.0.0.1:50070
   NameNodeId: 1
   DataNodeHeartBeatInterval: 8000
-  DataNodeHeartBeatTimeout: 30000
-  DataDir: /usr/projects_gen_data/goprogendata/trainfsdata/test/namenode
+  DataNodeHeartBeatTimeout: 20000
+#  DataDir: /usr/projects_gen_data/goprogendata/trainfsdata/test/namenode
+  DataDir: F:\ProjectsData\golang\TrainFS\NameNode
   # model: Single | Cluster
   Model: Single
   MeIndex: 0
