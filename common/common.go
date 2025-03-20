@@ -15,7 +15,7 @@ var ErrInputEmpty = errors.New("input not empty")
 var ErrHeartBeatNotExist = errors.New("hearBeat not exist, first need to reRegister")
 
 var ErrCanNotChangeRootDir = errors.New("NameNode: can not change root dir")
-var ErrCanNotDelNotEmptyDir = errors.New("NameNode: can not del not empty dir")
+var ErrCanNotDelNotEmptyDir = errors.New("NameNode: A non-empty folder name change is not allowed")
 var ErrPathFormatError = errors.New("NameNode: path format error")
 var ErrFileFormatError = errors.New("NameNode: file format error")
 var ErrFileNotFound = errors.New("NameNode: file not found")

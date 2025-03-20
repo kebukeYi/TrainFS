@@ -37,8 +37,8 @@ type NameNode struct {
 func NewNameNode() *NameNode {
 	nameNode := &NameNode{}
 	nameNode.Config = config.GetDataNodeConfig()
-	common.ClearDir(nameNode.Config.NameNode.DataDir)
-	common.ClearDir(nameNode.Config.NameNode.TaskDir)
+	//common.ClearDir(nameNode.Config.NameNode.DataDir)
+	//common.ClearDir(nameNode.Config.NameNode.TaskDir)
 	nameNode.metaStore = OpenDataStoreManger(nameNode.Config.NameNode.DataDir)
 	nameNode.taskStore = OpenTaskStoreManger(nameNode.Config.NameNode.TaskDir)
 	nameNode.chunkLocation = make(map[string][]*ReplicaMeta) // 等待 dataNode-1 上报的数据;
@@ -326,38 +326,58 @@ func (nn *NameNode) Mkdir(arg *proto.FileOperationArg) (*proto.MkdirReply, error
 func (nn *NameNode) ReName(arg *proto.FileOperationArg) (*proto.ReNameReply, error) {
 	nn.mux.Lock()
 	defer nn.mux.Unlock()
-	oldKeyFilePathName := arg.GetFileName()
-	newKeyFilePathName := arg.GetNewFileName()
-	fileMeta, err := nn.metaStore.GetFileMeta(oldKeyFilePathName)
+	reply := &proto.ReNameReply{Success: false}
+	oldPathFileName := arg.GetFileName()
+	newPathFileName := arg.GetNewFileName()
+	if oldPathFileName == "/" {
+		return nil, common.ErrCanNotChangeRootDir
+	}
+	// /root/y.data   /root y.data -> not allowed
+	// /root/app   /root app ->  /root/newApp   /root newApp
+	oldDirName, oldPath := common.SplitFileNamePath(oldPathFileName)
+	newDirName, newPath := common.SplitFileNamePath(newPathFileName)
+	// 只允许修改子目录名称, 不允许修改目录路径;
+	if oldPath != newPath {
+		return reply, common.ErrCanNotDelNotEmptyDir
+	}
+	parentNode, err := nn.checkPathOrCreate(oldPath, false)
 	if err != nil {
-		return nil, err
+		return reply, err
 	}
-	if fileMeta == nil {
-		return nil, common.ErrFileNotFound
+	meta := parentNode.ChildList[oldDirName]
+	if meta == nil {
+		return reply, common.ErrFileNotFound
 	}
-	if !fileMeta.IsDir {
-		// 1. 修改文件名;
-		// 2. 所有的副本的文件名得更改;
-		// 3. 所有的保存此副本的dataNode得更改其文件chunk名字;
-		return nil, common.ErrNotSupported
-	}
-	oldFileName, path := common.SplitFileNamePath(oldKeyFilePathName)
-	newFileName, _ := common.SplitFileNamePath(newKeyFilePathName)
-	parentNode, err := nn.checkPathOrCreate(path, false)
-	if err != nil {
-		return nil, err
-	}
-	fileMeta.FileName = newFileName
-	fileMeta.KeyFileName = newKeyFilePathName
-	parentNode.ChildList[newFileName] = fileMeta
-	delete(parentNode.ChildList, oldFileName)
-	err = nn.metaStore.PutFileMeta(parentNode.KeyFileName, parentNode)
-	if err != nil {
-		return nil, err
-	}
-	err = nn.metaStore.PutFileMeta(fileMeta.KeyFileName, fileMeta)
-	if err != nil {
-		return nil, err
+	// 1. 删除的是文件夹类型, 需要进一步判断是否是空目录;
+	if meta.IsDir {
+		getFile, err := nn.metaStore.GetFileMeta(meta.KeyFileName)
+		if err != nil {
+			return reply, err
+		}
+		if len(getFile.ChildList) > 0 {
+			return reply, common.ErrCanNotDelNotEmptyDir
+		} else {
+			err = nn.metaStore.Delete(meta.KeyFileName)
+			delete(parentNode.ChildList, oldDirName)
+			// 增加新文件信息;
+			fileMeta := &FileMeta{
+				FileName:    newDirName,                                           // newDir
+				KeyFileName: CreatKeyFileName(parentNode.KeyFileName, newDirName), // /user/app/newDir
+				IsDir:       true,
+				ChildList:   make(map[string]*FileMeta),
+			}
+			parentNode.ChildList[newPathFileName] = fileMeta
+			err = nn.metaStore.PutFileMeta(fileMeta.KeyFileName, fileMeta)
+			if err != nil {
+				return reply, err
+			}
+			err = nn.metaStore.PutFileMeta(parentNode.KeyFileName, parentNode)
+			if err != nil {
+				return reply, err
+			}
+		}
+	} else {
+		return &proto.ReNameReply{Success: false}, common.ErrNotSupported
 	}
 	return &proto.ReNameReply{Success: true}, nil
 }

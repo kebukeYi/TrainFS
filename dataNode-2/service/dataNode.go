@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"github.com/kebukeYi/TrainFS/common"
 	"github.com/kebukeYi/TrainFS/dataNode-2/config"
 	proto "github.com/kebukeYi/TrainFS/profile"
 	"google.golang.org/grpc"
@@ -43,9 +42,9 @@ type Replication struct {
 func NewDataNode() *DataNode {
 	dataNode := &DataNode{}
 	dataNode.Config = config.GetDataNodeConfig()
-	common.ClearDir(dataNode.Config.DataDir)
-	common.ClearDir(dataNode.Config.MetaDir)
-	common.ClearDir(dataNode.Config.TaskDir)
+	//common.ClearDir(dataNode.Config.DataDir)
+	//common.ClearDir(dataNode.Config.MetaDir)
+	//common.ClearDir(dataNode.Config.TaskDir)
 	dataNode.dataStoreManger = OpenStoreManager(dataNode.Config.DataDir)
 	dataNode.taskStoreManger = OpenStoreManager(dataNode.Config.TaskDir)
 	dataNode.metaStoreManger = OpenStoreManager(dataNode.Config.MetaDir)

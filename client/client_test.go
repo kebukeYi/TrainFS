@@ -44,7 +44,7 @@ func TestMkdir(t *testing.T) {
 			return
 		}
 	}
-	fmt.Printf("==================ListDir=====================================")
+	fmt.Println("==================ListDir=====================================")
 	time.Sleep(time.Second * 2)
 	remotePath11 := "/root/app"
 	remotePath5 := "/root/app/a1"
@@ -58,6 +58,39 @@ func TestMkdir(t *testing.T) {
 			return
 		}
 		fmt.Println(reply.String())
+	}
+}
+
+func TestReName(t *testing.T) {
+	client := cli.NewClient()
+	oldPath := "/root/app"
+	newPath := "/root/apps"
+	//nameReply, err := client.ReName(oldPath, newPath)
+	//if err != nil {
+	//	fmt.Println(err)
+	//} else {
+	//	fmt.Println(nameReply.String())
+	//}
+	fmt.Println("===================================================")
+	oldPath = "/root/aop"
+	newPath = "/root/newAop"
+	if err := client.Mkdir(oldPath); err != nil {
+		fmt.Println(err)
+		return
+	}
+	nameReply, err := client.ReName(oldPath, newPath)
+	if err != nil {
+		fmt.Println(err)
+		return
+	} else {
+		fmt.Println(nameReply.String())
+	}
+
+	if dirMetaList, err := client.ListDir("/root"); err != nil {
+		fmt.Println(err)
+		return
+	} else {
+		fmt.Println(dirMetaList.String())
 	}
 }
 
@@ -182,18 +215,6 @@ func TestList(t *testing.T) {
 	client := cli.NewClient()
 	remotePath := "/"
 	listDir, err := client.ListDir(remotePath)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Printf(listDir.String())
-}
-
-func TestReName(t *testing.T) {
-	client := cli.NewClient()
-	oldPath := "/user"
-	newPath := "/users"
-	listDir, err := client.ReName(oldPath, newPath)
 	if err != nil {
 		fmt.Println(err)
 		return
