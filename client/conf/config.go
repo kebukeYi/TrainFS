@@ -1,4 +1,4 @@
-package config
+package conf
 
 import (
 	"gopkg.in/yaml.v2"
@@ -30,8 +30,8 @@ func GetClientConfig() *ClientConfig {
 }
 
 func inits() {
-	//fileName := "client/config/client_config.yml" // package 在同级目录
-	fileName := "./config/client_config.yml" // package 在同级目录
+	//fileName := "client/conf/client_config.yml" // package 在同级目录
+	fileName := "./conf/client_config.yml" // package 在同级目录
 	file, err := os.OpenFile(fileName, os.O_RDWR, 0777)
 	defer file.Close()
 	if err != nil {

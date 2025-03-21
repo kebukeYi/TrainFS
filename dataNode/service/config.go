@@ -1,4 +1,4 @@
-package config
+package service
 
 import (
 	"fmt"
@@ -9,10 +9,10 @@ import (
 )
 
 type DataNodeConfig struct {
-	DataNode DataNode `yaml:"DataNode"`
+	Config Config `yaml:"Config"`
 }
 
-type DataNode struct {
+type Config struct {
 	Host              string `yaml:"Host"`
 	NameNodeHost      string `yaml:"NameNodeHost"`
 	DataNodeId        string `yaml:"DataNodeId"`
@@ -24,19 +24,12 @@ type DataNode struct {
 	MetaFileName      string `yaml:"MetaFileName"`
 }
 
-var conf *DataNodeConfig
-
-func GetDataNodeConfig() *DataNode {
-	inits()
-	return &conf.DataNode
-}
-
-func inits() {
-	fileName := "dataNode-1/config/dataNode_config.yml"
-	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE, 0777)
+func GetDataNodeConfig(configFile *string, hostPort *string, dataNodeId *string) *Config {
+	var conf *DataNodeConfig
+	file, err := os.OpenFile(*configFile, os.O_RDWR|os.O_CREATE, 0777)
 	defer file.Close()
 	if err != nil {
-		log.Fatalf(" fail to read fileName: %s, err: %s ;\n", fileName, err)
+		log.Fatalf(" fail to read fileName: %s, err: %s ;\n", configFile, err)
 	}
 	v, err := file.Stat()
 	size := v.Size()
@@ -52,18 +45,28 @@ func inits() {
 	if conf == nil {
 		log.Fatal("fail to unmarshal yaml :", err)
 	}
-	dataDir := conf.DataNode.DataDir
-	conf.DataNode.DataDir = filepath.Join(dataDir+conf.DataNode.DataNodeId, "data")
-	conf.DataNode.TaskDir = filepath.Join(dataDir+conf.DataNode.DataNodeId, "task")
-	conf.DataNode.MetaDir = filepath.Join(dataDir+conf.DataNode.DataNodeId, "meta")
 
-	err = os.MkdirAll(conf.DataNode.DataDir, 0777)
-	err = os.MkdirAll(conf.DataNode.TaskDir, 0777)
-	err = os.MkdirAll(conf.DataNode.MetaDir, 0777)
+	if hostPort != nil {
+		conf.Config.Host = *hostPort
+	}
+	if dataNodeId != nil {
+		conf.Config.DataNodeId = *dataNodeId
+	}
+
+	dataDir := conf.Config.DataDir
+	conf.Config.DataDir = filepath.Join(dataDir+conf.Config.DataNodeId, "data")
+	conf.Config.TaskDir = filepath.Join(dataDir+conf.Config.DataNodeId, "task")
+	conf.Config.MetaDir = filepath.Join(dataDir+conf.Config.DataNodeId, "meta")
+
+	err = os.MkdirAll(conf.Config.DataDir, 0777)
+	err = os.MkdirAll(conf.Config.TaskDir, 0777)
+	err = os.MkdirAll(conf.Config.MetaDir, 0777)
 
 	if err != nil {
 		log.Fatal("fail to open nameNodeData dir  :", err)
 	} else {
 		fmt.Println("Decode dataNode_config success.")
 	}
+
+	return &conf.Config
 }

@@ -13,26 +13,33 @@ func (dataNode *DataNode) Register() (bool, error) {
 	for {
 		nameServiceClient, err := dataNode.getGrpcNameNodeServerConn(dataNode.Config.NameNodeHost)
 		if err != nil {
-			fmt.Printf("DataNode[%s]-%s getGrpcNameNodeServerConn from %s to register failed...err:%v \n", dataNode.Config.Host, dataNode.Config.DataNodeId, dataNode.Config.NameNodeHost, err)
-			time.Sleep(2 * time.Second)
+			fmt.Printf("DataNode[%s]-%s getGrpcNameNodeServerConn from %s to register failed... err:%v \n",
+				dataNode.Config.Host, dataNode.Config.DataNodeId, dataNode.Config.NameNodeHost, err)
+			time.Sleep(3 * time.Second)
 			continue
 		}
 		freeSpace, err := disk.Usage(dataNode.Config.DataDir)
+		if err != nil {
+			fmt.Printf("DataNode[%s]-%s get freeSpace failed... err:%v \n",
+				dataNode.Config.Host, dataNode.Config.DataNodeId, err)
+			return false, err
+		}
 		reply, err := nameServiceClient.RegisterDataNode(context.Background(), &proto.DataNodeRegisterArg{
 			DataNodeAddress: dataNode.Config.Host,
 			FreeSpace:       freeSpace.Free,
 		})
 		if err != nil {
-			fmt.Printf("DataNode[%s]-%s send register failed......err:%v \n", dataNode.Config.Host, dataNode.Config.DataNodeId, err)
+			fmt.Printf("DataNode[%s]-%s send register failed... err:%v \n", dataNode.Config.Host, dataNode.Config.DataNodeId, err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
 		if reply.GetSuccess() {
-			fmt.Printf("DataNode[%s]-%s send register success......err:%v \n", dataNode.Config.Host, dataNode.Config.DataNodeId, err)
+			fmt.Printf("DataNode[%s]-%s send register success... err:%v \n", dataNode.Config.Host, dataNode.Config.DataNodeId, err)
 			go dataNode.ChunkReportTask()
 			break
 		} else {
-			fmt.Printf("DataNode[%s]-%s rev register fail context:%s......err:%v \n", dataNode.Config.Host, dataNode.Config.DataNodeId, reply.Context, err)
+			fmt.Printf("DataNode[%s]-%s rev register fail context:%s... err:%v \n",
+				dataNode.Config.Host, dataNode.Config.DataNodeId, reply.Context, err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
@@ -103,7 +110,7 @@ func (dataNode *DataNode) HeartBeatTask() {
 		}
 		retry = 0
 		// todo 正常心跳 调试打印
-		//fmt.Printf("DataNode[%s] send headrbeat;\n", dataNode-1.Config.Host)
+		//fmt.Printf("DataNode[%s] send headrbeat;\n", dataNode.Config.Host)
 		if heartBeatReply != nil {
 			go func() {
 				if len(heartBeatReply.TrashFilePathChunkNames) > 0 {

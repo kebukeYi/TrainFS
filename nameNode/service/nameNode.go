@@ -5,7 +5,6 @@ import (
 	"fmt"
 	DBcommon "github.com/kebukeYi/TrainDB/common"
 	"github.com/kebukeYi/TrainFS/common"
-	"github.com/kebukeYi/TrainFS/nameNode/config"
 	proto "github.com/kebukeYi/TrainFS/profile"
 	"sort"
 	"strings"
@@ -13,7 +12,7 @@ import (
 )
 
 type NameNode struct {
-	Config    *config.NameNodeConfig
+	Config    *NameNodeConfig
 	mux       sync.RWMutex
 	metaStore *MetaStoreManger
 	taskStore *TaskStoreManger
@@ -34,16 +33,16 @@ type NameNode struct {
 	dataNodeInfos map[string]*DataNodeInfo
 }
 
-func NewNameNode() *NameNode {
+func NewNameNode(configFile *string) *NameNode {
 	nameNode := &NameNode{}
-	nameNode.Config = config.GetDataNodeConfig()
-	//common.ClearDir(nameNode.Config.NameNode.DataDir)
-	//common.ClearDir(nameNode.Config.NameNode.TaskDir)
-	nameNode.metaStore = OpenDataStoreManger(nameNode.Config.NameNode.DataDir)
-	nameNode.taskStore = OpenTaskStoreManger(nameNode.Config.NameNode.TaskDir)
-	nameNode.chunkLocation = make(map[string][]*ReplicaMeta) // 等待 dataNode-1 上报的数据;
-	nameNode.dataNodeChunks = make(map[string][]*ChunkMeta)  // 等待 dataNode-1 上报的数据;
-	nameNode.dataNodeInfos = make(map[string]*DataNodeInfo)  // dataNode-1 信息;
+	nameNode.Config = GetDataNodeConfig(configFile)
+	//common.ClearDir(nameNode.Config.Config.DataDir)
+	//common.ClearDir(nameNode.Config.Config.TaskDir)
+	nameNode.metaStore = OpenDataStoreManger(nameNode.Config.Config.DataDir)
+	nameNode.taskStore = OpenTaskStoreManger(nameNode.Config.Config.TaskDir)
+	nameNode.chunkLocation = make(map[string][]*ReplicaMeta) // 等待 dataNode 上报的数据;
+	nameNode.dataNodeChunks = make(map[string][]*ChunkMeta)  // 等待 dataNode 上报的数据;
+	nameNode.dataNodeInfos = make(map[string]*DataNodeInfo)  // dataNode 信息;
 	return nameNode
 }
 
@@ -138,7 +137,7 @@ func (nn *NameNode) GetFileLocation(filePath string, replicaNum int32) (*proto.F
 	}
 	// 获得文件块信息;
 	fmt.Printf("NameNode rev GetFile(%s), dataStore.FileLocationInfo:%v;\n", filePath, fileMeta.Chunks)
-	// 文件块信息映射 dataNode-1 地址;
+	// 文件块信息映射 dataNode 地址;
 	//fmt.Printf("NameNode.chunkLocations: %v; \n", nn.chunkLocation)
 	fileLocationInfo := &proto.FileLocationInfo{}
 	fileLocationInfo.FileSize = fileMeta.FileSize           // 文件总大小;
@@ -166,7 +165,7 @@ func (nn *NameNode) GetFileLocation(filePath string, replicaNum int32) (*proto.F
 				DataNodeAddress:   &proto.DataNodeChain{DataNodeAddress: addresses},
 			})
 		} else {
-			// 相关chunk没有找到, 说明 dataNode-1 还没提交相关文件块信息;
+			// 相关chunk没有找到, 说明 dataNode 还没提交相关文件块信息;
 			return nil, common.ErrChunkReplicaNotFound
 		}
 	}
@@ -219,7 +218,7 @@ func (nn *NameNode) DeleteFile(arg *proto.FileOperationArg) (*proto.DeleteFileRe
 			nn.metaStore.PutFileMeta(parentNode.KeyFileName, parentNode)
 		}
 	} else { // 2. 删除的是一个文件, 那么就需要删除文件块信息,并下发给dataNode删除任务;
-		meta, err = nn.metaStore.GetFileMeta(meta.KeyFileName) // 尝试获取最新的 dataNode-1 的上传信息;
+		meta, err = nn.metaStore.GetFileMeta(meta.KeyFileName) // 尝试获取最新的 dataNode 的上传信息;
 		if err != nil {
 			return nil, err
 		}
@@ -232,7 +231,7 @@ func (nn *NameNode) DeleteFile(arg *proto.FileOperationArg) (*proto.DeleteFileRe
 					nodeInfo.trashChunkNames = append(nodeInfo.trashChunkNames, chunk.ChunkName)
 					nodeTrashKey := GetDataNodeTrashKey(nodeInfo.Address)
 					// 持久化dataNode的删除任务; 会不会出现覆盖之前的未执行的任务? 不会, 每次保存的都是全量任务;
-					// dataNode-1 执行完任务后, 提交后, nameNode剔除掉删除任务;
+					// dataNode 执行完任务后, 提交后, nameNode剔除掉删除任务;
 					err = nn.taskStore.PutTrashes(nodeTrashKey, nodeInfo.trashChunkNames)
 					if err != nil {
 						fmt.Printf("NameNode for PutTrashes delete chunk:%s, replicaIP:%s err:%v ;\n",
@@ -241,9 +240,9 @@ func (nn *NameNode) DeleteFile(arg *proto.FileOperationArg) (*proto.DeleteFileRe
 					}
 					fmt.Printf("NameNode for PutTrashes delete chunk:%s, replica:%s ;\n", chunk.ChunkName, replicaMeta.DataNodeAddress)
 				}
-				// 删除 <chunk*,dataNode-1>内存映射;
+				// 删除 <chunk*,dataNode>内存映射;
 				delete(nn.chunkLocation, chunk.ChunkName)
-				// 删除 <dataNode-1,chunks> 内存映射;
+				// 删除 <dataNode,chunks> 内存映射;
 			}
 		}()
 		// 主协程完成 删除文件信息;

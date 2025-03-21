@@ -1,4 +1,4 @@
-NameNode:
+Config:
   Host: 127.0.0.1:50070
   NameNodeId: 1
   DataNodeHeartBeatInterval: 8000

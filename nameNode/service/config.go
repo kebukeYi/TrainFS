@@ -1,4 +1,4 @@
-package config
+package service
 
 import (
 	"fmt"
@@ -9,10 +9,10 @@ import (
 )
 
 type NameNodeConfig struct {
-	NameNode NameNode `yaml:"NameNode"`
+	Config Config `yaml:"Config"`
 }
 
-type NameNode struct {
+type Config struct {
 	Host                      string `yaml:"Host"`
 	NameNodeId                string `yaml:"NameNodeId"`
 	DataNodeHeartBeatInterval int    `yaml:"DataNodeHeartBeatInterval"`
@@ -31,20 +31,12 @@ const (
 	Cluster string = "Cluster"
 )
 
-var conf *NameNodeConfig
-
-func GetDataNodeConfig() *NameNodeConfig {
-	inits()
-	return conf
-}
-
-func inits() {
-	//fileName := "nameNode_config.yml"
-	fileName := "nameNode/config/nameNode_config.yml"
-	file, err := os.OpenFile(fileName, os.O_RDWR, 0777)
+func GetDataNodeConfig(confPath *string) *NameNodeConfig {
+	conf := &NameNodeConfig{}
+	file, err := os.OpenFile(*confPath, os.O_RDWR, 0777)
 	defer file.Close()
 	if err != nil {
-		log.Fatalf(" fail to read fileName: %s, err: %s ;\n", fileName, err)
+		log.Fatalf(" fail to read fileName: %s, err: %s ;\n", confPath, err)
 	}
 	v, err := file.Stat()
 	size := v.Size()
@@ -60,27 +52,28 @@ func inits() {
 	if conf == nil {
 		log.Fatal("fail to unmarshal yaml :", err)
 	}
-	dataDir := conf.NameNode.DataDir
+	dataDir := conf.Config.DataDir
 
-	conf.NameNode.DataDir = filepath.Join(dataDir+conf.NameNode.NameNodeId, "data")
-	conf.NameNode.TaskDir = filepath.Join(dataDir+conf.NameNode.NameNodeId, "task")
+	conf.Config.DataDir = filepath.Join(dataDir+conf.Config.NameNodeId, "data")
+	conf.Config.TaskDir = filepath.Join(dataDir+conf.Config.NameNodeId, "task")
 
-	err = os.MkdirAll(conf.NameNode.DataDir, os.ModePerm)
+	err = os.MkdirAll(conf.Config.DataDir, os.ModePerm)
 	if err != nil {
 		log.Fatal("fail to open nameNodeData dir  :", err)
 	}
-	err = os.MkdirAll(conf.NameNode.TaskDir, os.ModePerm)
+	err = os.MkdirAll(conf.Config.TaskDir, os.ModePerm)
 	if err != nil {
 		log.Fatal("fail to open nameNodeData dir  :", err)
 	}
 
-	model := conf.NameNode.Model
+	model := conf.Config.Model
 	if model == Single {
-		return
+		return conf
 	} else if model == Cluster {
-		fmt.Printf("nameNode_config Cluster %v \n", conf.NameNode.PeerNameNodes)
+		fmt.Printf("nameNode_config Cluster %v \n", conf.Config.PeerNameNodes)
 	} else {
 		log.Fatal("unknown the nameNode model: ", model)
 	}
 	fmt.Println("Decode nameNode_config success.")
+	return conf
 }

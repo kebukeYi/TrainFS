@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"github.com/kebukeYi/TrainFS/dataNode-1/config"
 	proto "github.com/kebukeYi/TrainFS/profile"
 	"google.golang.org/grpc"
 	"sync"
@@ -18,7 +17,7 @@ const (
 
 type DataNode struct {
 	mux             sync.RWMutex
-	Config          *config.DataNode
+	Config          *Config
 	name            string
 	dataStoreManger *StoreManger
 
@@ -39,16 +38,13 @@ type Replication struct {
 	ToAddress         string
 }
 
-func NewDataNode() *DataNode {
+func NewDataNode(configFile *string, hostPort *string, dataNodeId *string) *DataNode {
 	dataNode := &DataNode{}
-	dataNode.Config = config.GetDataNodeConfig()
+	dataNode.Config = GetDataNodeConfig(configFile, hostPort, dataNodeId)
 	//common.ClearDir(dataNode.Config.DataDir)
 	//common.ClearDir(dataNode.Config.MetaDir)
 	//common.ClearDir(dataNode.Config.TaskDir)
-	dataNode.dataStoreManger = OpenStoreManager(dataNode.Config.DataDir)
-	dataNode.taskStoreManger = OpenStoreManager(dataNode.Config.TaskDir)
-	dataNode.metaStoreManger = OpenStoreManager(dataNode.Config.MetaDir)
-
+	dataNode.recoveryData()
 	chunkInfos, err := dataNode.metaStoreManger.GetChunkInfos(AllChunkInfosKey)
 	if err != nil {
 		fmt.Printf("NewDataNode.dataNode.metaStoreManger.GetChunkInfos(%s) err: %v \n", AllChunkInfosKey, err)
@@ -133,7 +129,7 @@ func (dataNode *DataNode) PutChunk(stream proto.ClientToDataService_PutChunkServ
 	}
 
 	// 另外开一个协程处理写,主协程继续判断是否继续 转发数据;
-	// todo dataNode-1 PutChunk()方法需要改进;
+	// todo dataNode PutChunk()方法需要改进;
 	chunkInfo := &proto.ChunkInfo{
 		ChunkId:           chunkId,
 		ChunkSize:         int64(len(buf)),
@@ -203,7 +199,7 @@ func (dataNode *DataNode) PutChunk(stream proto.ClientToDataService_PutChunkServ
 		dataServiceClient, err := dataNode.getGrpcDataServerConn(nextNodeServer)
 		putChunkClient, err := dataServiceClient.PutChunk(context.Background())
 		if err != nil {
-			fmt.Printf("DataNode[%s]-%s dataNode-1.getGrpcDataServerConn(%s) ;error: %s \n",
+			fmt.Printf("DataNode[%s]-%s dataNode.getGrpcDataServerConn(%s) ;error: %s \n",
 				dataNode.Config.Host, dataNode.Config.DataNodeId,
 				nextNodeServer, err)
 			return err
@@ -235,7 +231,7 @@ func (dataNode *DataNode) PutChunk(stream proto.ClientToDataService_PutChunkServ
 func (dataNode *DataNode) CommitChunk(arg *proto.CommitChunkArg) (*proto.CommitChunkReply, error) {
 	nameServiceClient, err := dataNode.getGrpcNameNodeServerConn(dataNode.Config.NameNodeHost)
 	if err != nil {
-		fmt.Printf("DataNode[%s]-%s dataNode-1.getGrpcNameNodeServerConn(%s) ;error: %s \n",
+		fmt.Printf("DataNode[%s]-%s dataNode.getGrpcNameNodeServerConn(%s) ;error: %s \n",
 			dataNode.Config.Host, dataNode.Config.DataNodeId,
 			dataNode.Config.NameNodeHost, err)
 		return nil, err
@@ -289,15 +285,21 @@ func (dataNode *DataNode) getGrpcNameNodeServerConn(address string) (proto.DataT
 func (dataNode *DataNode) CheckTask() {
 	if len(dataNode.TrashTask) > 0 {
 		fmt.Printf("DataNode[%s]-%s TrashTask:%v; strat...\n", dataNode.Config.Host, dataNode.Config.DataNodeId, dataNode.TrashTask)
-		//go dataNode-1.Trash(dataNode-1.TrashTask)
+		//go dataNode.Trash(dataNode.TrashTask)
 		dataNode.TrashChan <- dataNode.TrashTask
 	}
 	// time.Sleep(time.Second * 3)
 	if len(dataNode.ReplicaTask) > 0 {
 		fmt.Printf("DataNode[%s]-%s ReplicaTask:%v; strat...\n", dataNode.Config.Host, dataNode.Config.DataNodeId, dataNode.ReplicaTask)
-		//go dataNode-1.Replica(dataNode-1.ReplicaTask)
+		//go dataNode.Replica(dataNode.ReplicaTask)
 		dataNode.ReplicaChain <- dataNode.ReplicaTask
 	}
+}
+
+func (dataNode *DataNode) recoveryData() {
+	dataNode.dataStoreManger = OpenStoreManager(dataNode.Config.DataDir)
+	dataNode.taskStoreManger = OpenStoreManager(dataNode.Config.TaskDir)
+	dataNode.metaStoreManger = OpenStoreManager(dataNode.Config.MetaDir)
 }
 
 func (dataNode *DataNode) Close() error {

@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	DBcommon "github.com/kebukeYi/TrainDB/common"
 	"github.com/kebukeYi/TrainFS/common"
@@ -101,6 +102,14 @@ func TestSplitFileNamePath(t *testing.T) {
 		//		test.fileNamePath, fileName, path, test.expectedFile, test.expectedPath)
 		//}
 	}
+}
+
+func TestNewNameNode(t *testing.T) {
+	configFile := flag.String("conf", "./conf/nameNode_config.yml", "Path to conf file")
+	flag.Parse()
+	nameNode := &NameNode{}
+	nameNode.Config = GetDataNodeConfig(configFile)
+	fmt.Println(nameNode.Config)
 }
 
 func TestGetChunkIdOfFileChunkName_Success(t *testing.T) {

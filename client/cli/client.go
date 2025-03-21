@@ -3,7 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
-	"github.com/kebukeYi/TrainFS/client/config"
+	"github.com/kebukeYi/TrainFS/client/conf"
 	"github.com/kebukeYi/TrainFS/common"
 	proto "github.com/kebukeYi/TrainFS/profile"
 	"google.golang.org/grpc"
@@ -16,7 +16,7 @@ import (
 )
 
 type Client struct {
-	conf     *config.ClientConfig
+	conf     *conf.ClientConfig
 	name     string
 	clientId int
 	SeqId    int
@@ -24,7 +24,7 @@ type Client struct {
 
 func NewClient() *Client {
 	client := &Client{}
-	client.conf = config.GetClientConfig()
+	client.conf = conf.GetClientConfig()
 	client.clientId = client.conf.Client.ClientId
 	client.name = "client-" + strconv.Itoa(client.clientId)
 	client.SeqId = 0
@@ -121,7 +121,7 @@ func (c *Client) doWrite(remoteFilePath string, fileTotalSize int64, fileData []
 		Ack:              false, // 是否检测全部文件 chunk 数据;
 	}
 
-	// 客户端确认可能需要时间, 因为 dataNode-1 存储文件块以及转发文件,以及提交, 需要时间;
+	// 客户端确认可能需要时间, 因为 dataNode 存储文件块以及转发文件,以及提交, 需要时间;
 	confirmFileReply := c.ConfirmFile(arg)
 
 	if !confirmFileReply.GetSuccess() {
@@ -205,7 +205,7 @@ func (c *Client) GetFile(localPath string, remoteFilePath string) (*os.File, err
 			if err != nil {
 				fmt.Printf("client faile to chunkClient.Recv():%s,from:%s, err:%s; \n",
 					chunkInfo.FilePathChunkName, nodeAddress, err)
-				// 同一个 chunkName, 向下一个 dataNode-1 请求数据;
+				// 同一个 chunkName, 向下一个 dataNode 请求数据;
 				continue
 			} else {
 				fmt.Printf("client chunkClient.Recv():%s,from:%s,success; \n",

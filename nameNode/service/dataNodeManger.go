@@ -132,7 +132,7 @@ func (nn *NameNode) ChunkReport(arg *proto.FileLocationInfo) (*proto.ChunkReport
 		if errors.Is(err, common.ErrFileNotFound) {
 			fmt.Printf("NameNode rev ChunkReport from ip:%s,find filePathName:%s, FilePathChunkName:%s not exist at dataStore, so dataNode[%s] need to delete it after! \n",
 				dataNodeAddress, filePathName, chunk.FilePathChunkName, dataNodeAddress)
-			// dataNode-1 上传的信息, nameNode 没有此信息; 下发删除任务;
+			// dataNode 上传的信息, nameNode 没有此信息; 下发删除任务;
 			// 什么情境下会发生这样的事情? 用户删除文件, 但是此dataNode下线了,没有及时执行删除任务;
 			nodeInfo := nn.dataNodeInfos[dataNodeAddress]
 			nodeInfo.trashChunkNames = append(nodeInfo.trashChunkNames, chunk.FilePathChunkName)
@@ -186,7 +186,7 @@ func (nn *NameNode) CommitChunk(arg *proto.CommitChunkArg) (*proto.CommitChunkRe
 	// 仅仅是为了保存 fileName 被分成的几个chunk块名字;当存在chunkName时,就说明至少被一个dataNode所存储过了,
 	// 其他需要更新 副本复制, 副本删除任务进度; dataNode每次重启都会上报自己所存储的信息;
 	switch arg.Operation {
-	case proto.ChunkReplicateStatus_LostToReplicate: // 2.dataNode-1 send;
+	case proto.ChunkReplicateStatus_LostToReplicate: // 2.dataNode send;
 		//  dataNode宕机下线导致数据丢失,触发复制后的提交;
 		nn.HandleStoreFileChunk(arg) // 更新内存映射; 因为就算丢失了,file的chunkName不会变少,还是固定的,不用持久化更新;
 		// 需要删除对应的复制任务;
@@ -196,7 +196,7 @@ func (nn *NameNode) CommitChunk(arg *proto.CommitChunkArg) (*proto.CommitChunkRe
 			return &proto.CommitChunkReply{Success: false}, err
 		}
 		return &proto.CommitChunkReply{Success: true}, nil
-	case proto.ChunkReplicateStatus_NormalToReplicate: // 1.client send to dataNode-1; 2.dataNode-1 send to dataNode-1;
+	case proto.ChunkReplicateStatus_NormalToReplicate: // 1.client send to dataNode; 2.dataNode send to dataNode;
 		fmt.Printf("NameNode rev commitChunk NormalToReplicate: chunkId:%d; dataNodeAddress:%s; filePathName:%s ; fileChunkName:%s;\n",
 			arg.ChunkId, arg.DataNodeAddress, arg.FilePathName, arg.FileChunkName)
 		nn.HandleStoreFileChunk(arg)           // 更新内存映射;
@@ -272,8 +272,8 @@ func (nn *NameNode) HandleNormalToReplicate(arg *proto.CommitChunkArg) error {
 		})
 		if meta.Chunks != nil || len(meta.Chunks) == 0 {
 			// file : file_chunk_0  file_chunk_1  file_chunk_2
-			// dataNode-1-1 commit file_chunk_0
-			// dataNode-1-2 commit file_chunk_0
+			// dataNode-1 commit file_chunk_0
+			// dataNode-2 commit file_chunk_0
 			for _, chunkMeta := range meta.Chunks {
 				// 本地已经有了这个文件块信息;直接返回;
 				if chunkMeta.ChunkName == fileChunkName {
@@ -344,15 +344,15 @@ func (nn *NameNode) CheckHeartBeat() {
 		for address, dataNodeInfo := range nn.dataNodeInfos {
 			// 距离上一次的上线时间超过心跳检测时间,则认为该dataNode已经宕机;
 			if time.Now().UnixMilli()-dataNodeInfo.HeartBeatTimeStamp >
-				int64(nn.Config.NameNode.DataNodeHeartBeatTimeout) && dataNodeInfo.Status == datanodeUp {
+				int64(nn.Config.Config.DataNodeHeartBeatTimeout) && dataNodeInfo.Status == datanodeUp {
 				fmt.Printf("NameNode CheckHeartBeat() dataNode:%s down! now dataNodeInfos[%v] \n",
 					address, nn.dataNodeInfos)
-				// todo 要不要持久化 dataNode-1 的状态,以及NameNode中的内存队列
+				// todo 要不要持久化 dataNode 的状态,以及NameNode中的内存队列
 				// 执行dataNode下线后的资源清理工作;
 				go nn.ReplicationBalance(address)
 			}
 		}
-		time.Sleep(time.Duration(nn.Config.NameNode.DataNodeHeartBeatInterval) * time.Millisecond)
+		time.Sleep(time.Duration(nn.Config.Config.DataNodeHeartBeatInterval) * time.Millisecond)
 	}
 }
 
