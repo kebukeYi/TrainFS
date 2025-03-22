@@ -36,8 +36,8 @@ type NameNode struct {
 func NewNameNode(configFile *string) *NameNode {
 	nameNode := &NameNode{}
 	nameNode.Config = GetDataNodeConfig(configFile)
-	//common.ClearDir(nameNode.Config.Config.DataDir)
-	//common.ClearDir(nameNode.Config.Config.TaskDir)
+	common.ClearDir(nameNode.Config.Config.DataDir)
+	common.ClearDir(nameNode.Config.Config.TaskDir)
 	nameNode.metaStore = OpenDataStoreManger(nameNode.Config.Config.DataDir)
 	nameNode.taskStore = OpenTaskStoreManger(nameNode.Config.Config.TaskDir)
 	nameNode.chunkLocation = make(map[string][]*ReplicaMeta) // 等待 dataNode 上报的数据;
@@ -58,10 +58,16 @@ func (nn *NameNode) PutFile(arg *proto.FileOperationArg) (*proto.DataNodeChain, 
 	if err != nil {
 		return nil, err
 	}
-	// 改进: 根据参数,是否覆盖原文件; 还是追加(1)(2)(3)等副本文件;
+	// 改进: 根据参数,是否覆盖原文件; 还是追加文件;
 	if _, ok := parentNode.ChildList[fileName]; ok {
 		return nil, common.ErrFileAlreadyExists
 	}
+	// 1. 选择 dataNode节点;
+	choseDataNodes, err := nn.choseDataNode(int(arg.ReplicaNum))
+	if err != nil {
+		return nil, err
+	}
+
 	fileMeta := &FileMeta{
 		FileName:    fileName,                                           // example.txt
 		KeyFileName: CreatKeyFileName(parentNode.KeyFileName, fileName), // /user/app + / + example.txt
@@ -70,21 +76,17 @@ func (nn *NameNode) PutFile(arg *proto.FileOperationArg) (*proto.DataNodeChain, 
 		ChunkNum:    arg.ChunkNum,
 	}
 	parentNode.ChildList[fileName] = fileMeta
-	// 1. 首先保存 最底层文件块信息;
+	// 2. 保存 最底层文件块信息;
 	err = nn.metaStore.PutFileMeta(fileMeta.KeyFileName, fileMeta)
 	if err != nil {
 		return nil, err
 	}
-	// 2. 再保存 父节点信息;
+	// 3. 再保存 父节点信息;
 	err = nn.metaStore.PutFileMeta(parentNode.KeyFileName, parentNode)
 	if err != nil {
 		return nil, err
 	}
-	// 3. 选择 dataNode节点;
-	choseDataNodes, err := nn.choseDataNode(int(arg.ReplicaNum))
-	if err != nil {
-		return nil, err
-	}
+
 	dataNode := make([]string, 0)
 	for _, node := range choseDataNodes {
 		dataNode = append(dataNode, node.Address)

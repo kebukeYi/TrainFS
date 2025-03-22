@@ -125,7 +125,7 @@ func TestPutFile(t *testing.T) {
 			fmt.Println(err)
 			return
 		}
-		fmt.Println(dirMetaList.String())
+		fmt.Printf("listDir(%s):%s \n", path, dirMetaList.String())
 	}
 	fmt.Printf("=======================================================\n")
 	time.Sleep(time.Second * 1)
@@ -141,6 +141,7 @@ func TestPutFile(t *testing.T) {
 	file, err := client.GetFile(localPath2, remoteFilePath2)
 	if err != nil {
 		fmt.Printf("getFile(%s) ,err:%s \n", remoteFilePath2, err)
+		return
 	}
 	fmt.Println(file.Name())
 	file.Close()

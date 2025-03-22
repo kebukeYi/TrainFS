@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/kebukeYi/TrainFS/common"
 	proto "github.com/kebukeYi/TrainFS/profile"
 	"google.golang.org/grpc"
 	"sync"
@@ -41,9 +42,9 @@ type Replication struct {
 func NewDataNode(configFile *string, hostPort *string, dataNodeId *string) *DataNode {
 	dataNode := &DataNode{}
 	dataNode.Config = GetDataNodeConfig(configFile, hostPort, dataNodeId)
-	//common.ClearDir(dataNode.Config.DataDir)
-	//common.ClearDir(dataNode.Config.MetaDir)
-	//common.ClearDir(dataNode.Config.TaskDir)
+	common.ClearDir(dataNode.Config.DataDir)
+	common.ClearDir(dataNode.Config.MetaDir)
+	common.ClearDir(dataNode.Config.TaskDir)
 	dataNode.recoveryData()
 	chunkInfos, err := dataNode.metaStoreManger.GetChunkInfos(AllChunkInfosKey)
 	if err != nil {
