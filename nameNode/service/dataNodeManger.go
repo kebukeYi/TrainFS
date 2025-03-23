@@ -132,16 +132,16 @@ func (nn *NameNode) ChunkReport(arg *proto.FileLocationInfo) (*proto.ChunkReport
 		if errors.Is(err, common.ErrFileNotFound) {
 			fmt.Printf("NameNode rev ChunkReport from ip:%s,find filePathName:%s, FilePathChunkName:%s not exist at dataStore, so dataNode[%s] need to delete it after! \n",
 				dataNodeAddress, filePathName, chunk.FilePathChunkName, dataNodeAddress)
-			// dataNode 上传的信息, nameNode 没有此信息; 下发删除任务;
+			// dataNode 上传的信息, nameNode 没有此信息, 下发删除任务;
 			// 什么情境下会发生这样的事情? 用户删除文件, 但是此dataNode下线了,没有及时执行删除任务;
 			nodeInfo := nn.dataNodeInfos[dataNodeAddress]
 			nodeInfo.trashChunkNames = append(nodeInfo.trashChunkNames, chunk.FilePathChunkName)
-		} else {
+		} else if err != nil {
 			fmt.Printf("NameNode rev ChunkReport from ip:%s,find filePathName:%s, FilePathChunkName:%s err:%s! \n",
 				dataNodeAddress, filePathName, chunk.FilePathChunkName, err)
 			return nil, err
 		}
-		// todo nameNode 核心, 根据dataNode上传的chunk信息, 构建内存中的文件映射; 需要去重;
+		// todo nameNode 核心, 根据dataNode上传的chunk信息, 构建内存中的文件映射, 需要去重;
 		nn.updateChunkLocation(chunk.FilePathChunkName, dataNodeAddress)
 		nn.updateDataNodeChunks(chunk, dataNodeAddress)
 	}

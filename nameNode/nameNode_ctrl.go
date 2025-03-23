@@ -41,11 +41,9 @@ func (s RpcServer) ListDir(con context.Context, arg *proto.FileOperationArg) (*p
 func (s RpcServer) ReName(con context.Context, arg *proto.FileOperationArg) (*proto.ReNameReply, error) {
 	return s.nameNode.ReName(arg)
 }
-
 func (s RpcServer) Mkdir(con context.Context, arg *proto.FileOperationArg) (*proto.MkdirReply, error) {
 	return s.nameNode.Mkdir(arg)
 }
-
 func (s RpcServer) RegisterDataNode(con context.Context, arg *proto.DataNodeRegisterArg) (*proto.DataNodeRegisterReply, error) {
 	return s.nameNode.RegisterDataNode(arg)
 }

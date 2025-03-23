@@ -1,6 +1,7 @@
 # TrainFS
 
 本单机文件系统,支持基本读写删除,目录等操作; 元数据存储NameNode中, 文件大小切分成块, 存储在DataNode中.
+![TrainFS-Put流程题](docs/TrainFS-Put.png)
 
 ## 功能讲解
 

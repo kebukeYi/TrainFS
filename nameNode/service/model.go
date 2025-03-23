@@ -1,6 +1,7 @@
 package service
 
 type datanodeStatus string
+
 type replicaState string
 
 type FileMeta struct {
