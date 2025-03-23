@@ -3,7 +3,52 @@
 本单机文件系统,支持基本读写删除,目录等操作; 元数据存储NameNode中, 文件大小切分成块, 存储在DataNode中.
 
 ---
-例如 "TrainFS-Put流程图":
+
+### 启动开始
+````
+NameNode节点启动
+A方式: 本地编辑器源码调试,run kind 选择 package 即可;
+注意项目参数输入指定配置信息
+program arguments: -conf=nameNode/conf/nameNode_config.yml
+
+B方式: 下载源码后,直接启动;
+cd TrainFS/nameNode
+go run nameNode_ctrl.go -conf=./conf/nameNode_config.yml
+
+C: 构建可执行程序方式启动;
+cd TrainFS/nameNode
+go build -o ./build/nameNode
+cd ../build
+./nameNode
+
+DataNode-*节点启动
+A方式: 本地编辑器源码调试,run kind 选择 package 即可;
+注意项目参数输入指定配置信息: program arguments: -id=* -host=127.0.0.1:900* -conf=dataNode/conf/dataNode_config.yml
+
+B方式: 下载源码后,直接启动;
+cd TrainFS/dataNode
+go run dataNode_ctrl.go -id=* -host=127.0.0.1:900* -conf=./conf/dataNode_config.yml
+
+C方式: 构建可执行程序方式启动;
+cd TrainFS/dataNode
+go build -o ./build/dataNode.exe
+cd ../build
+./dataNode -id=* -host=127.0.0.1:900*
+
+client 测试启动
+go test -run TestPutFile
+go test -run TestGetFile
+go test -run TestDelete
+
+修改.proto文件的需要提前安装好protoc插件
+go get -u google.golang.org/protobuf/proto
+go get -u google.golang.org/protobuf/protoc-gen-go
+cd profile
+protoc --go_out=. --go-grpc_out=. ./*.proto
+````
+---
+
+举例 "TrainFS-Put流程图":
 ![TrainFS-Put流程图](docs/TrainFS-Put.png )
 
 ## 功能讲解

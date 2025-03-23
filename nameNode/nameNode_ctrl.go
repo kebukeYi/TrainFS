@@ -61,11 +61,6 @@ func (s RpcServer) LiveDetection(con context.Context, arg *proto.LiveDetectionAr
 }
 
 func main() {
-	// A: src code run kind : package
-	// program arguments: -conf=nameNode/conf/nameNode_config.yml
-	// B: go run nameNode_ctrl.go -conf=./conf/nameNode_config.yml
-	// C: go build -o ./build/nameNode.exe
-	//    cd build; nameNode.exe
 	configFile := flag.String("conf", "../conf/nameNode_config.yml", "Path to conf file")
 	flag.Parse()
 	newNameNode := service.NewNameNode(configFile)

@@ -30,11 +30,6 @@ func (s *RpcServer) GetDataNodeInfo(con context.Context, arg *proto.FileOperatio
 }
 
 func main() {
-	// A: src code run kind : package
-	// program arguments: -id=1 -host=127.0.0.1:9001 -conf=dataNode/conf/dataNode_config.yml
-	// B: go run dataNode_ctrl.go -id=1 -host=127.0.0.1:9001 -conf=./conf/dataNode_config.yml
-	// C: go build -o ./build/dataNode.exe
-	//    cd build dataNode.exe -id=1 -host=127.0.0.1:9001
 	dataNodeId := flag.String("id", "", "dataNodeID")
 	hostIP := flag.String("host", "", "dataNode local addr ip:port")
 	configFile := flag.String("conf", "../conf/dataNode_config.yml", "Path to conf file")
