@@ -36,8 +36,8 @@ type NameNode struct {
 func NewNameNode(configFile *string) *NameNode {
 	nameNode := &NameNode{}
 	nameNode.Config = GetDataNodeConfig(configFile)
-	common.ClearDir(nameNode.Config.Config.DataDir)
-	common.ClearDir(nameNode.Config.Config.TaskDir)
+	//common.ClearDir(nameNode.Config.Config.DataDir)
+	//common.ClearDir(nameNode.Config.Config.TaskDir)
 	nameNode.metaStore = OpenDataStoreManger(nameNode.Config.Config.DataDir)
 	nameNode.taskStore = OpenTaskStoreManger(nameNode.Config.Config.TaskDir)
 	nameNode.chunkLocation = make(map[string][]*ReplicaMeta) // 等待 dataNode 上报的数据;

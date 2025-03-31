@@ -70,7 +70,6 @@ func main() {
 			log.Fatalf("failed to close: %v", err)
 		}
 	}(newNameNode)
-
 	server1 := &RpcServer{nameNode: newNameNode}
 	server2 := &RpcServer{nameNode: newNameNode}
 	listen, err := net.Listen("tcp", newNameNode.Config.Config.Host)
