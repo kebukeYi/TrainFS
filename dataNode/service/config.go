@@ -13,23 +13,26 @@ type DataNodeConfig struct {
 }
 
 type Config struct {
-	Host              string `yaml:"Host"`
+	Host              string
+	Port              string `yaml:"Port"`
 	NameNodeHost      string `yaml:"NameNodeHost"`
 	DataNodeId        string `yaml:"DataNodeId"`
 	HeartbeatInterval int    `yaml:"HeartbeatInterval"`
 	HeartBeatRetry    int    `yaml:"HeartBeatRetry"`
+	MaxRecvMsgSize    int    `yaml:"MaxRecvMsgSize"`
+	MaxSendMsgSize    int    `yaml:"MaxSendMsgSize"`
 	DataDir           string `yaml:"DataDir"`
 	TaskDir           string
 	MetaDir           string
 	MetaFileName      string `yaml:"MetaFileName"`
 }
 
-func GetDataNodeConfig(configFile *string, hostPort *string, dataNodeId *string) *Config {
+func GetDataNodeConfig(configFile *string, port *string, dataNodeId *string) *Config {
 	var conf *DataNodeConfig
 	file, err := os.OpenFile(*configFile, os.O_RDWR|os.O_CREATE, 0777)
 	defer file.Close()
 	if err != nil {
-		log.Fatalf(" fail to read fileName: %s, err: %s ;\n", configFile, err)
+		log.Fatalf(" fail to read fileName: %s, err: %s ;\n", *configFile, err)
 	}
 	v, err := file.Stat()
 	size := v.Size()
@@ -46,8 +49,8 @@ func GetDataNodeConfig(configFile *string, hostPort *string, dataNodeId *string)
 		log.Fatal("fail to unmarshal yaml :", err)
 	}
 
-	if hostPort != nil {
-		conf.Config.Host = *hostPort
+	if port != nil {
+		conf.Config.Port = *port
 	}
 	if dataNodeId != nil {
 		conf.Config.DataNodeId = *dataNodeId

@@ -1,7 +1,12 @@
 Client:
   ClientId: 1
+  # 单位 MB
+  MaxCallSendMsgSize: 70
+  MaxCallRecvMsgSize: 70
   NameNode:
-    Host: 127.0.0.1:50070
-    ChunkSize: 400
+#    Host: 127.0.0.1:50070
+    Host: 1.94.19.238:50070
+    # ChunkSize 单位 MB
+    ChunkSize: 35
     ChunkReplicaNum: 3
     ConfirmFileAck: false

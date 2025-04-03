@@ -11,8 +11,10 @@ type ClientConfig struct {
 }
 
 type Client struct {
-	ClientId int      `yaml:"ClientId"`
-	NameNode NameNode `yaml:"NameNode"`
+	ClientId           int      `yaml:"ClientId"`
+	MaxCallRecvMsgSize int      `yaml:"MaxCallRecvMsgSize"`
+	MaxCallSendMsgSize int      `yaml:"MaxCallSendMsgSize"`
+	NameNode           NameNode `yaml:"NameNode"`
 }
 
 type NameNode struct {

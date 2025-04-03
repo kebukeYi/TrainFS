@@ -18,6 +18,8 @@ type Config struct {
 	DataNodeHeartBeatInterval int    `yaml:"DataNodeHeartBeatInterval"`
 	DataNodeHeartBeatTimeout  int    `yaml:"DataNodeHeartBeatTimeout"`
 	TrashInterval             int    `yaml:"TrashInterval"`
+	MaxRecvMsgSize            int    `yaml:"MaxRecvMsgSize"`
+	MaxSendMsgSize            int    `yaml:"MaxSendMsgSize"`
 	MetaFileName              string `yaml:"MetaFileName"`
 	DataDir                   string `yaml:"DataDir"`
 	TaskDir                   string

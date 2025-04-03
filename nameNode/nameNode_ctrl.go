@@ -76,7 +76,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	server := grpc.NewServer()
+	server := grpc.NewServer(grpc.MaxSendMsgSize(newNameNode.Config.Config.MaxSendMsgSize*1024*1024),
+		grpc.MaxRecvMsgSize(newNameNode.Config.Config.MaxRecvMsgSize*1024*1024))
 	proto.RegisterClientToNameServiceServer(server, server1)
 	proto.RegisterDataToNameServiceServer(server, server2)
 	fmt.Printf("NameNode server %s start... \n", newNameNode.Config.Config.Host)

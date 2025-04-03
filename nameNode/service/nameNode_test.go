@@ -200,9 +200,9 @@ func (m *MockLevelDB) SetFileMeta(path string, fileMeta *FileMeta) {
 	m.fileMetaMap[path] = fileMeta
 }
 
-func (nn *MockLevelDB) checkPathOrCreate(path string, notCreate bool) (*FileMeta, error) {
+func (m *MockLevelDB) checkPathOrCreate(path string, notCreate bool) (*FileMeta, error) {
 	if path == "/" {
-		fileMeta, err := nn.GetFileMeta(path)
+		fileMeta, err := m.GetFileMeta(path)
 		if errors.Is(err, DBcommon.ErrKeyNotFound) && notCreate {
 			fileMeta := &FileMeta{
 				IsDir:     true,
@@ -210,11 +210,11 @@ func (nn *MockLevelDB) checkPathOrCreate(path string, notCreate bool) (*FileMeta
 				FileName:  path,
 				FileSize:  0,
 			}
-			nn.PutFileMeta(path, fileMeta)
+			m.PutFileMeta(path, fileMeta)
 		}
 		return fileMeta, err
 	}
-	rootFileMeta, _ := nn.GetFileMeta("/")
+	rootFileMeta, _ := m.GetFileMeta("/")
 	split := strings.Split(path, "/")[1:]
 	for i := 0; i < len(split); i++ {
 		dir := split[i] // app
@@ -227,9 +227,9 @@ func (nn *MockLevelDB) checkPathOrCreate(path string, notCreate bool) (*FileMeta
 					FileName:  CreatKeyFileName(rootFileMeta.FileName, dir),
 					FileSize:  0,
 				}
-				nn.PutFileMeta(fileMeta.FileName, fileMeta)
+				m.PutFileMeta(fileMeta.FileName, fileMeta)
 				rootFileMeta.ChildList[dir] = fileMeta
-				nn.PutFileMeta(rootFileMeta.FileName, rootFileMeta)
+				m.PutFileMeta(rootFileMeta.FileName, rootFileMeta)
 				rootFileMeta = fileMeta
 				continue
 			}
@@ -240,6 +240,13 @@ func (nn *MockLevelDB) checkPathOrCreate(path string, notCreate bool) (*FileMeta
 	return rootFileMeta, nil
 }
 
+func TestGetOutBoundIP(t *testing.T) {
+	if ip, err := common.GetOutBoundIP(); err != nil {
+		t.Error(err)
+	} else {
+		fmt.Printf("ip: %s\n", ip)
+	}
+}
 func TestNameNodeCheckPathOrCreate(t *testing.T) {
 	nn := &MockLevelDB{fileMetaMap: map[string]*FileMeta{}}
 	fileMeta := &FileMeta{

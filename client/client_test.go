@@ -1,12 +1,79 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"github.com/kebukeYi/TrainFS/client/cli"
 	"github.com/kebukeYi/TrainFS/common"
+	"os"
+	"regexp"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
+
+// parseSize 解析类似 "1GB", "512MB" 的字符串为字节数
+func parseSize(sizeStr string) (int64, error) {
+	re := regexp.MustCompile(`^(\d+)([KMGT]B)?$`)
+	parts := re.FindStringSubmatch(strings.ToUpper(sizeStr))
+	if parts == nil {
+		return 0, errors.New("invalid size format")
+	}
+
+	num, _ := strconv.ParseInt(parts[1], 10, 64)
+	unit := parts[2]
+
+	switch unit {
+	case "TB":
+		return num * 1024 * 1024 * 1024 * 1024, nil
+	case "GB":
+		return num * 1024 * 1024 * 1024, nil
+	case "MB":
+		return num * 1024 * 1024, nil
+	case "KB":
+		return num * 1024, nil
+	default:
+		return num, nil // 无单位时视为字节
+	}
+}
+
+// createFile 快速生成指定大小的文件
+func CreateEmptyFile(filename string, sizeStr string) error {
+	size, err := parseSize(sizeStr)
+	if err != nil {
+		return err
+	}
+
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	// 使用 1MB 缓冲区提高写入效率
+	buffer := make([]byte, 1024*1024) // 1MB 块
+	for written := int64(0); written < size; {
+		chunkSize := size - written
+		if chunkSize > int64(len(buffer)) {
+			chunkSize = int64(len(buffer))
+		}
+		n, err := file.Write(buffer[:chunkSize])
+		if err != nil {
+			return err
+		}
+		written += int64(n)
+	}
+	return nil
+}
+
+func TestTruncateFile(t *testing.T) {
+	localFilePath := "F:\\ProjectsData\\golang\\TrainFS\\client\\put\\456.data" // 992KB / 400 = 3块
+	err := cli.TruncateFile(localFilePath, 1024*1024)
+	if err != nil {
+		return
+	}
+}
 
 func TestGetFileOfChunkName(t *testing.T) {
 	fileName := "/user/app/example.txt"
@@ -106,7 +173,8 @@ func TestPutFile(t *testing.T) {
 	//localFilePath := "/usr/projects_gen_data/goprogendata/trainfsdata/test/client/put/810KB.png" // 912KB / 400 = 3块
 
 	// windows
-	localFilePath := "F:\\ProjectsData\\golang\\TrainFS\\client\\put\\y.jpg" // 992KB / 400 = 3块
+	localFilePath := "F:\\ProjectsData\\golang\\TrainFS\\client\\put\\222.data"
+	//localFilePath := "F:\\ProjectsData\\golang\\TrainFS\\client\\put\\y.jpg"
 
 	// nameNode`s remotePath format linux
 	remotePath1 := "/root/app"
@@ -137,7 +205,8 @@ func TestPutFile(t *testing.T) {
 
 	// nameNode`s remotePath format linux
 	//remoteFilePath2 := "/root/app/810KB.png"
-	remoteFilePath2 := "/root/app/y.jpg"
+	remoteFilePath2 := "/root/app/222.data"
+	//remoteFilePath2 := "/root/app/y.jpg"
 	file, err := client.GetFile(localPath2, remoteFilePath2)
 	if err != nil {
 		fmt.Printf("getFile(%s) ,err:%s \n", remoteFilePath2, err)
@@ -157,7 +226,8 @@ func TestGetFile(t *testing.T) {
 
 	// nameNode`s remotePath format linux
 	//remoteFilePath1 := "/root/app/810KB.png"
-	remoteFilePath1 := "/root/app/y.jpg"
+	//remoteFilePath1 := "/root/app/y.jpg"
+	remoteFilePath1 := "/root/app8282524010649360361/222.data"
 	file, err := client.GetFile(localPath1, remoteFilePath1)
 	if err != nil {
 		fmt.Printf("getFile(%s) ,err:%s \n", remoteFilePath1, err)
@@ -214,7 +284,7 @@ func TestDelete(t *testing.T) {
 
 func TestList(t *testing.T) {
 	client := cli.NewClient()
-	remotePath := "/"
+	remotePath := "/root"
 	listDir, err := client.ListDir(remotePath)
 	if err != nil {
 		fmt.Println(err)

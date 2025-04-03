@@ -35,13 +35,14 @@ func NewClient() *Client {
 // localFilePath: /local/file/example.txt
 // remotePath: /user/app
 // remoteFilePath: /user/app/example.txt
-func (c *Client) PutFile(localFilePath string, remotePath string) {
+func (c *Client) PutFile(localFilePath string, remotePath string) error {
 	fileData, err := os.ReadFile(localFilePath)
 	if err != nil {
 		log.Fatalf("not found localfile: %s", localFilePath)
+		return err
 	}
 	// 400 * 1024 => 400KB
-	chunkSize := c.conf.Client.NameNode.ChunkSize * 1024
+	chunkSize := c.conf.Client.NameNode.ChunkSize * 1024 * 1024
 	var chunkNum int64
 	if int64(len(fileData))%chunkSize != 0 {
 		chunkNum = int64(len(fileData))/chunkSize + 1
@@ -53,7 +54,9 @@ func (c *Client) PutFile(localFilePath string, remotePath string) {
 	err = c.doWrite(remoteFilePath, int64(len(fileData)), fileData, chunkSize, chunkNum)
 	if err != nil {
 		fmt.Printf("doWrite file error: %v\n", err)
+		return err
 	}
+	return nil
 }
 
 func (c *Client) doWrite(remoteFilePath string, fileTotalSize int64, fileData []byte, chunkSize int64, chunkNum int64) error {
@@ -65,7 +68,8 @@ func (c *Client) doWrite(remoteFilePath string, fileTotalSize int64, fileData []
 		ReplicaNum: c.conf.Client.NameNode.ChunkReplicaNum,
 	}
 	replicaNum := fileOperationArg.ReplicaNum
-	nameServiceClient := getNameNodeConnection(c.conf.Client.NameNode.Host)
+	callBack, nameServiceClient := getNameNodeConnection(c.conf.Client.NameNode.Host)
+	defer callBack()
 	// client 向 nameNode 发送文件信息, 来获得datanode信息;
 	dataServerChain, err := nameServiceClient.PutFile(context.Background(), fileOperationArg)
 	if err != nil {
@@ -132,8 +136,10 @@ func (c *Client) doWrite(remoteFilePath string, fileTotalSize int64, fileData []
 }
 
 func (c *Client) writeToDataNode(dataNodeAddress string, file *proto.FileDataStream) error {
-	dataServiceClient := getDataNodeConnection(dataNodeAddress)
-	putChunkClient, err := dataServiceClient.PutChunk(context.Background())
+	callBack, dataServiceClient := getDataNodeConnection(dataNodeAddress)
+	defer callBack()
+	putChunkClient, err := dataServiceClient.PutChunk(context.Background(),
+		grpc.MaxCallSendMsgSize(c.conf.Client.MaxCallSendMsgSize*1024*1024))
 	if err != nil {
 		return err
 	}
@@ -157,10 +163,12 @@ func (c *Client) writeToDataNode(dataNodeAddress string, file *proto.FileDataStr
 }
 
 func (c *Client) ConfirmFile(arg *proto.ConfirmFileArg) *proto.ConfirmFileReply {
-	nameServiceClient := getNameNodeConnection(c.conf.Client.NameNode.Host)
+	callBack, nameServiceClient := getNameNodeConnection(c.conf.Client.NameNode.Host)
+	defer callBack()
 	confirmFileReply, err := nameServiceClient.ConfirmFile(context.Background(), arg)
 	if err != nil {
 		fmt.Printf("client faile to ConfirmFile:%s ack:%v, err:%s; \n", arg.FileName, arg.Ack, err)
+		return nil
 	}
 	return confirmFileReply
 }
@@ -170,7 +178,8 @@ func (c *Client) GetFile(localPath string, remoteFilePath string) (*os.File, err
 		Operation: proto.FileOperationArg_READ,
 		FileName:  remoteFilePath,
 	}
-	nameServiceClient := getNameNodeConnection(c.conf.Client.NameNode.Host)
+	callBack, nameServiceClient := getNameNodeConnection(c.conf.Client.NameNode.Host)
+	defer callBack()
 
 	fileLocationInfo, err := nameServiceClient.GetFile(context.Background(), fileOperationArg)
 	if err != nil {
@@ -194,20 +203,24 @@ func (c *Client) GetFile(localPath string, remoteFilePath string) (*os.File, err
 	for _, chunkInfo := range sortChunkNames { // chunkNameInfo1, chunkNameInfo2, chunkNameInfo3
 		dataNodeAddress := chunkInfo.DataNodeAddress.DataNodeAddress
 		for _, nodeAddress := range dataNodeAddress {
-			toDataServiceClient := getDataNodeConnection(nodeAddress)
+			callBack, toDataServiceClient := getDataNodeConnection(nodeAddress)
 			chunkClient, err := toDataServiceClient.GetChunk(context.Background(),
-				&proto.FileOperationArg{FileName: chunkInfo.FilePathChunkName})
+				&proto.FileOperationArg{FileName: chunkInfo.FilePathChunkName},
+				grpc.MaxCallRecvMsgSize(c.conf.Client.MaxCallRecvMsgSize*1024*1024))
 			if err != nil {
+				callBack()
 				fmt.Printf("client faile to GetChunk:%s, err:%s; \n", chunkInfo.FilePathChunkName, err)
 				continue
 			}
 			fileDataStream, err := chunkClient.Recv()
 			if err != nil {
+				callBack()
 				fmt.Printf("client faile to chunkClient.Recv():%s,from:%s, err:%s; \n",
 					chunkInfo.FilePathChunkName, nodeAddress, err)
 				// 同一个 chunkName, 向下一个 dataNode 请求数据;
 				continue
 			} else {
+				callBack()
 				fmt.Printf("client chunkClient.Recv():%s,from:%s,success; \n",
 					chunkInfo.FilePathChunkName, nodeAddress)
 				buf = append(buf, fileDataStream.Data...)
@@ -244,7 +257,8 @@ func (c *Client) DeleteFile(remoteFilePath string) error {
 		Operation: proto.FileOperationArg_DELETE,
 		FileName:  remoteFilePath,
 	}
-	nameServiceClient := getNameNodeConnection(c.conf.Client.NameNode.Host)
+	callBack, nameServiceClient := getNameNodeConnection(c.conf.Client.NameNode.Host)
+	defer callBack()
 	_, err := nameServiceClient.DeleteFile(context.Background(), fileOperationArg)
 	if err != nil {
 		return err
@@ -257,7 +271,8 @@ func (c *Client) ListDir(remotePath string) (*proto.DirMetaList, error) {
 		Operation: proto.FileOperationArg_LISTDIR,
 		FileName:  remotePath,
 	}
-	nameServiceClient := getNameNodeConnection(c.conf.Client.NameNode.Host)
+	callBack, nameServiceClient := getNameNodeConnection(c.conf.Client.NameNode.Host)
+	defer callBack()
 	metaList, err := nameServiceClient.ListDir(context.Background(), fileOperationArg)
 	if err != nil {
 		return nil, err
@@ -270,7 +285,8 @@ func (c *Client) Mkdir(remotePath string) error {
 		Operation: proto.FileOperationArg_MKDIR,
 		FileName:  remotePath,
 	}
-	nameServiceClient := getNameNodeConnection(c.conf.Client.NameNode.Host)
+	callBack, nameServiceClient := getNameNodeConnection(c.conf.Client.NameNode.Host)
+	defer callBack()
 	_, err := nameServiceClient.Mkdir(context.Background(), fileOperationArg)
 	if err != nil {
 		return err
@@ -285,7 +301,8 @@ func (c *Client) ReName(oldPath string, newPath string) (*proto.ReNameReply, err
 		FileName:    oldPath,
 		NewFileName: newPath,
 	}
-	nameServiceClient := getNameNodeConnection(c.conf.Client.NameNode.Host)
+	callBack, nameServiceClient := getNameNodeConnection(c.conf.Client.NameNode.Host)
+	defer callBack()
 	nameReply, err := nameServiceClient.ReName(context.Background(), fileOperationArg)
 	if err != nil {
 		return nil, err
@@ -293,40 +310,70 @@ func (c *Client) ReName(oldPath string, newPath string) (*proto.ReNameReply, err
 	return nameReply, nil
 }
 
-func getNameNodeConnection(nameNodeAddress string) proto.ClientToNameServiceClient {
-	conn, err := grpc.DialContext(context.Background(), nameNodeAddress, grpc.WithInsecure())
+func getNameNodeConnection(nameNodeAddress string) (func() error, proto.ClientToNameServiceClient) {
+	conn, err := grpc.NewClient(nameNodeAddress, grpc.WithInsecure())
+	done := func() error {
+		return conn.Close()
+	}
 	if err != nil {
 		log.Printf("Did not connect to nameNodeAddress %v error %v ;\n", nameNodeAddress, err)
+		return nil, nil
 	}
 	client := proto.NewClientToNameServiceClient(conn)
-	return client
+	return done, client
 }
 
-func getDataNodeConnection(dataNodeAddress string) proto.ClientToDataServiceClient {
-	conn, err := grpc.DialContext(context.Background(), dataNodeAddress, grpc.WithInsecure())
+func getDataNodeConnection(dataNodeAddress string) (func() error, proto.ClientToDataServiceClient) {
+	conn, err := grpc.NewClient(dataNodeAddress, grpc.WithInsecure())
+	done := func() error {
+		return conn.Close()
+	}
 	if err != nil {
 		log.Printf("Did not connect to dataNodeAddress %v error %v ;\n", dataNodeAddress, err)
+		return nil, nil
 	}
 	client := proto.NewClientToDataServiceClient(conn)
-	return client
+	return done, client
 }
 
 // Deprecated
 func (c *Client) getFileLocation(arg *proto.FileOperationArg) *proto.FileLocationInfo {
-	nameServiceClient := getNameNodeConnection(c.conf.Client.NameNode.Host)
+	callBack, nameServiceClient := getNameNodeConnection(c.conf.Client.NameNode.Host)
+	defer callBack()
 	fileLocation, err := nameServiceClient.GetFileLocation(context.Background(), arg)
 	if err != nil {
 		log.Fatalf("fail to getFileLocation %v \n", err)
+		return nil
 	}
 	return fileLocation
 }
 
 // Deprecated
 func (c *Client) getFileStoreChain(arg *proto.FileOperationArg) *proto.DataNodeChain {
-	nameServiceClient := getNameNodeConnection(c.conf.Client.NameNode.Host)
+	callBack, nameServiceClient := getNameNodeConnection(c.conf.Client.NameNode.Host)
+	defer callBack()
 	fileLocation, err := nameServiceClient.GetFileStoreChain(context.Background(), arg)
 	if err != nil {
 		log.Fatalf("fail to getFileLocation %v \n", err)
+		return nil
 	}
 	return fileLocation
+}
+
+func TruncateFile(filename string, size int64) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	err = file.Truncate(size)
+	if err != nil {
+		return err
+	}
+	fileInfo, err := os.Stat(filename)
+	if err != nil {
+		return err
+	}
+	println(fileInfo.Size())
+	return nil
 }

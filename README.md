@@ -21,19 +21,23 @@ go build -o ./build/nameNode
 cd ../build
 ./nameNode
 
-DataNode-*节点启动
-A方式: 本地编辑器源码调试,run kind 选择 package 即可;
-注意项目参数输入指定配置信息: program arguments: -id=* -host=127.0.0.1:900* -conf=dataNode/conf/dataNode_config.yml
+DataNode-* 多节点启动
+A方式: 本地编辑器源码调试,run kind 选择 package 即可:
+注意项目参数输入指定配置信息: program arguments: -id=1 -port=9001 -conf=dataNode/conf/dataNode_config.yml
 
-B方式: 下载源码后,进入源码目录中直接启动;
+B方式: 下载源码后,进入源码目录中直接启动:
 cd TrainFS/dataNode
-go run dataNode_ctrl.go -id=* -host=127.0.0.1:900* -conf=./conf/dataNode_config.yml
+go run dataNode_ctrl.go -id=1 -port=9001 -conf=./conf/dataNode_config.yml
+go run dataNode_ctrl.go -id=2 -port=9002 -conf=./conf/dataNode_config.yml
+go run dataNode_ctrl.go -id=3 -port=9003 -conf=./conf/dataNode_config.yml
 
-C方式: 构建可执行文件方式启动;
+C方式: 构建可执行文件方式启动:
 cd TrainFS/dataNode
-go build -o ./build/dataNode.exe
+go build -o ./build/dataNode
 cd ../build
-./dataNode -id=* -host=127.0.0.1:900*
+./dataNode -id=1 -port=9001
+./dataNode -id=2 -port=9002
+./dataNode -id=3 -port=9003
 
 进入client源码中,测试启动
 go test -run TestPutFile

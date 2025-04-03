@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"github.com/kebukeYi/TrainFS/common"
 	proto "github.com/kebukeYi/TrainFS/profile"
 	"github.com/shirou/gopsutil/v3/disk"
 	"log"
@@ -50,5 +51,12 @@ func TestStoreManger_PutChunkInfos(t *testing.T) {
 			fmt.Printf("infos: %v \n", infos)
 		}
 	}
+}
 
+func TestGetOutBoundIP(t *testing.T) {
+	if ip, err := common.GetOutBoundIP(); err != nil {
+		t.Error(err)
+	} else {
+		fmt.Printf("ip: %s\n", ip)
+	}
 }

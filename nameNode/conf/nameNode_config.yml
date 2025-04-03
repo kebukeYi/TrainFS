@@ -3,6 +3,9 @@ Config:
   NameNodeId: 1
   DataNodeHeartBeatInterval: 8000
   DataNodeHeartBeatTimeout: 20000
+  # 单位 MB
+  MaxSendMsgSize: 10
+  MaxRecvMsgSize: 10
 #  DataDir: /usr/projects_gen_data/goprogendata/trainfsdata/test/namenode
   DataDir: F:\ProjectsData\golang\TrainFS\NameNode
   # model: Single | Cluster

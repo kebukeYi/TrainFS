@@ -11,19 +11,23 @@ import (
 
 func (dataNode *DataNode) Register() (bool, error) {
 	for {
-		nameServiceClient, err := dataNode.getGrpcNameNodeServerConn(dataNode.Config.NameNodeHost)
+	GETCONN:
+		callBack, nameServiceClient, err := dataNode.getGrpcNameNodeServerConn(dataNode.Config.NameNodeHost)
 		if err != nil {
 			fmt.Printf("DataNode[%s]-%s getGrpcNameNodeServerConn from %s to register failed... err:%v \n",
 				dataNode.Config.Host, dataNode.Config.DataNodeId, dataNode.Config.NameNodeHost, err)
 			time.Sleep(3 * time.Second)
-			continue
+			goto GETCONN
 		}
+
 		freeSpace, err := disk.Usage(dataNode.Config.DataDir)
 		if err != nil {
 			fmt.Printf("DataNode[%s]-%s get freeSpace failed... err:%v \n",
 				dataNode.Config.Host, dataNode.Config.DataNodeId, err)
 			return false, err
 		}
+
+	REGISTER:
 		reply, err := nameServiceClient.RegisterDataNode(context.Background(), &proto.DataNodeRegisterArg{
 			DataNodeAddress: dataNode.Config.Host,
 			FreeSpace:       freeSpace.Free,
@@ -31,17 +35,18 @@ func (dataNode *DataNode) Register() (bool, error) {
 		if err != nil {
 			fmt.Printf("DataNode[%s]-%s send register failed... err:%v \n", dataNode.Config.Host, dataNode.Config.DataNodeId, err)
 			time.Sleep(2 * time.Second)
-			continue
+			goto REGISTER
 		}
 		if reply.GetSuccess() {
 			fmt.Printf("DataNode[%s]-%s send register success... err:%v \n", dataNode.Config.Host, dataNode.Config.DataNodeId, err)
 			go dataNode.ChunkReportTask()
+			callBack()
 			break
 		} else {
-			fmt.Printf("DataNode[%s]-%s rev register fail context:%s... err:%v \n",
+			fmt.Printf("DataNode[%s]-%s rev register fail reply:%s... err:%v \n",
 				dataNode.Config.Host, dataNode.Config.DataNodeId, reply.Context, err)
-			time.Sleep(2 * time.Second)
-			continue
+			callBack()
+			return false, err
 		}
 	}
 	return true, nil
@@ -49,7 +54,8 @@ func (dataNode *DataNode) Register() (bool, error) {
 
 // ChunkReportTask 上报自身存储chunk信息任务;
 func (dataNode *DataNode) ChunkReportTask() {
-	nameServiceClient, err := dataNode.getGrpcNameNodeServerConn(dataNode.Config.NameNodeHost)
+	callBack, nameServiceClient, err := dataNode.getGrpcNameNodeServerConn(dataNode.Config.NameNodeHost)
+	defer callBack()
 	if err != nil {
 		fmt.Printf("DataNode[%s]-%s getGrpcNameNodeServerConn fail...err:%v \n",
 			dataNode.Config.Host, dataNode.Config.DataNodeId, err)
@@ -87,7 +93,8 @@ func (dataNode *DataNode) ChunkReportTask() {
 func (dataNode *DataNode) HeartBeatTask() {
 	retry := 0
 	interval := dataNode.Config.HeartbeatInterval
-	nameServiceClient, err := dataNode.getGrpcNameNodeServerConn(dataNode.Config.NameNodeHost)
+	callBack, nameServiceClient, err := dataNode.getGrpcNameNodeServerConn(dataNode.Config.NameNodeHost)
+	defer callBack()
 	if err != nil {
 		fmt.Printf("DataNode[%s]-%s getGrpcNameNodeServerConn to heart fail...err:%v \n", dataNode.Config.Host, dataNode.Config.DataNodeId, err)
 		return
@@ -140,18 +147,20 @@ func (dataNode *DataNode) HeartBeatTask() {
 
 func (dataNode *DataNode) LiveDetectionTask(address string) {
 	interval := dataNode.Config.HeartbeatInterval
+
+	callBack, nameServiceClient, err := dataNode.getGrpcNameNodeServerConn(address)
+	defer callBack()
+	if err != nil {
+		fmt.Printf("DataNode[%s]-%s getGrpcNameNodeServerConn() con failed. err:%v \n",
+			dataNode.Config.Host, dataNode.Config.DataNodeId, err)
+		return
+	}
 	for {
-		time.Sleep(time.Duration(interval) * time.Millisecond)
-		nameServiceClient, err := dataNode.getGrpcNameNodeServerConn(address)
-		if err != nil {
-			fmt.Printf("DataNode[%s]-%s getGrpcNameNodeServerConn() con failed. err:%v \n",
-				dataNode.Config.Host, dataNode.Config.DataNodeId, err)
-			continue
-		}
 		detectionReply, err := nameServiceClient.LiveDetection(context.Background(), &proto.LiveDetectionArg{DataNodeAddress: dataNode.Config.Host})
 		if err != nil {
 			fmt.Printf("DataNode[%s]-%s send address:%s liveDetection rpc failed. err:%s \n",
 				dataNode.Config.Host, dataNode.Config.DataNodeId, address, err)
+			time.Sleep(time.Duration(interval) * time.Millisecond)
 			continue
 		}
 		if detectionReply.Success {
@@ -199,28 +208,25 @@ func (dataNode *DataNode) Trash(fileChunkNames []string) {
 				dataNode.Config.Host, dataNode.Config.DataNodeId, fileChunkName, err)
 			return
 		} else {
-			for {
-				_, err = dataNode.CommitChunk(&proto.CommitChunkArg{
-					FileChunkName:   fileChunkName,
-					FilePathName:    tempChunkInfo.FilePathName,
-					FileSize:        tempChunkInfo.ChunkSize,
-					Operation:       proto.ChunkReplicateStatus_DeleteFileChunk,
-					ChunkId:         tempChunkInfo.ChunkId,
-					SrcAddress:      dataNode.Config.Host,
-					DataNodeAddress: []string{dataNode.Config.Host},
-				})
-				if err != nil {
-					// todo 应该重试，不应该删除本地任务;
-					fmt.Printf("DataNode[%s]-%s CommitChunk(%s) type:%s ; fail. err:%s \n",
-						dataNode.Config.Host, dataNode.Config.DataNodeId, fileChunkName,
-						proto.ChunkReplicateStatus_DeleteFileChunk, err)
-					continue
-				} else {
-					fmt.Printf("DataNode[%s]-%s CommitChunk(%s) type:%s ; success.\n",
-						dataNode.Config.Host, dataNode.Config.DataNodeId, fileChunkName,
-						proto.ChunkReplicateStatus_DeleteFileChunk)
-					break
-				}
+			_, err = dataNode.CommitChunk(&proto.CommitChunkArg{
+				FileChunkName:   fileChunkName,
+				FilePathName:    tempChunkInfo.FilePathName,
+				FileSize:        tempChunkInfo.ChunkSize,
+				Operation:       proto.ChunkReplicateStatus_DeleteFileChunk,
+				ChunkId:         tempChunkInfo.ChunkId,
+				SrcAddress:      dataNode.Config.Host,
+				DataNodeAddress: []string{dataNode.Config.Host},
+			}, 4)
+			if err != nil {
+				// todo 应该重试，重试失败后,应该保存到本地;
+				fmt.Printf("DataNode[%s]-%s CommitChunk(%s) type:%s; fail. err:%s \n",
+					dataNode.Config.Host, dataNode.Config.DataNodeId, fileChunkName,
+					proto.ChunkReplicateStatus_DeleteFileChunk, err)
+				continue
+			} else {
+				fmt.Printf("DataNode[%s]-%s CommitChunk(%s) type:%s; success.\n",
+					dataNode.Config.Host, dataNode.Config.DataNodeId, fileChunkName,
+					proto.ChunkReplicateStatus_DeleteFileChunk)
 			}
 			if i+1 >= fileChunkNameSize {
 				break
@@ -262,12 +268,14 @@ func (dataNode *DataNode) Replica(replications []*Replication) {
 	}
 	replicationSize := len(replications)
 	for i, replication := range replications {
+		callBack, dataServiceClient, err := dataNode.getGrpcDataServerConn(replication.ToAddress)
+		if err != nil {
+			fmt.Printf("DataNode[%s]-%s getGrpcDataServerConn(%s) to Replica fail; err:%v \n",
+				dataNode.Config.Host, dataNode.Config.DataNodeId, replication.ToAddress, err)
+			callBack()
+			continue
+		}
 		for {
-			dataServiceClient, err := dataNode.getGrpcDataServerConn(replication.ToAddress)
-			if err != nil {
-				fmt.Printf("DataNode[%s]-%s getGrpcDataServerConn(%s) to Replica fail; err:%v \n",
-					dataNode.Config.Host, dataNode.Config.DataNodeId, replication.ToAddress, err)
-			}
 			putChunkClient, err := dataServiceClient.PutChunk(context.Background())
 			if err != nil {
 				fmt.Printf("DataNode[%s]-%s dataServiceClient.PutChunk() to Replica fail; err:%v \n",
@@ -306,6 +314,7 @@ func (dataNode *DataNode) Replica(replications []*Replication) {
 					replication.ToAddress, err)
 				time.Sleep(time.Second * 1)
 			} else {
+				callBack()
 				break
 			}
 		}
