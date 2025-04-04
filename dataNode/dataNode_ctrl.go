@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/kebukeYi/TrainFS/common"
 	"github.com/kebukeYi/TrainFS/dataNode/service"
 	proto "github.com/kebukeYi/TrainFS/profile"
 	"google.golang.org/grpc"
@@ -43,7 +44,7 @@ func main() {
 			log.Fatalln(err)
 		}
 	}(dataNode)
-	ip, err := service.GetOutBoundIP()
+	ip, err := common.GetOutBoundIP()
 	if err != nil {
 		fmt.Printf("get ip fail! err:%s", err)
 		return
@@ -64,7 +65,6 @@ func main() {
 	// 3.上报成功, 启动心跳检测;
 	// 4.执行心跳传送回来的trash信息, 进行trash处理;
 	// 5.执行心跳传送回来的replicate, 进行复制处理;
-	ip = "1.94.19.238"
 	dataNode.Config.Host = ip + ":" + dataNode.Config.Port
 	register, err := dataNode.Register()
 	if register {

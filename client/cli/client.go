@@ -35,11 +35,11 @@ func NewClient() *Client {
 // localFilePath: /local/file/example.txt
 // remotePath: /user/app
 // remoteFilePath: /user/app/example.txt
-func (c *Client) PutFile(localFilePath string, remotePath string) error {
+func (c *Client) PutFile(localFilePath string, remotePath string) (string, error) {
 	fileData, err := os.ReadFile(localFilePath)
 	if err != nil {
 		log.Fatalf("not found localfile: %s", localFilePath)
-		return err
+		return "", err
 	}
 	// 400 * 1024 => 400KB
 	chunkSize := c.conf.Client.NameNode.ChunkSize * 1024 * 1024
@@ -54,9 +54,9 @@ func (c *Client) PutFile(localFilePath string, remotePath string) error {
 	err = c.doWrite(remoteFilePath, int64(len(fileData)), fileData, chunkSize, chunkNum)
 	if err != nil {
 		fmt.Printf("doWrite file error: %v\n", err)
-		return err
+		return "", err
 	}
-	return nil
+	return remoteFilePath, nil
 }
 
 func (c *Client) doWrite(remoteFilePath string, fileTotalSize int64, fileData []byte, chunkSize int64, chunkNum int64) error {

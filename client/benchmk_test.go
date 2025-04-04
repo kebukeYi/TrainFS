@@ -32,7 +32,7 @@ func BenchmarkPutFile(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		randPath := rand.Int()
 		newRemotePath := remotePath + strconv.Itoa(randPath)
-		err = client.PutFile(filePathName, newRemotePath)
+		_, err = client.PutFile(filePathName, newRemotePath)
 		require.Nil(b, err)
 	}
 }

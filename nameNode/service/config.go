@@ -13,7 +13,8 @@ type NameNodeConfig struct {
 }
 
 type Config struct {
-	Host                      string `yaml:"Host"`
+	Host                      string
+	Port                      string `yaml:"Port"`
 	NameNodeId                string `yaml:"NameNodeId"`
 	DataNodeHeartBeatInterval int    `yaml:"DataNodeHeartBeatInterval"`
 	DataNodeHeartBeatTimeout  int    `yaml:"DataNodeHeartBeatTimeout"`

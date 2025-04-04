@@ -1,5 +1,5 @@
 Config:
-  Host: 127.0.0.1:50070
+  Port: 50070
   NameNodeId: 1
   DataNodeHeartBeatInterval: 8000
   DataNodeHeartBeatTimeout: 20000
@@ -10,5 +10,4 @@ Config:
   DataDir: F:\ProjectsData\golang\TrainFS\NameNode
   # model: Single | Cluster
   Model: Single
-  MeIndex: 0
-  PeerNameNodes: [127.0.0.1:50070,127.0.0.1:50071,127.0.0.1:50072]
+  PeerNameNodes: [127.0.0.1:50071,127.0.0.1:50072]

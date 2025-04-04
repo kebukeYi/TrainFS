@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/kebukeYi/TrainFS/common"
 	"github.com/kebukeYi/TrainFS/nameNode/service"
 	proto "github.com/kebukeYi/TrainFS/profile"
 	"google.golang.org/grpc"
@@ -72,6 +73,12 @@ func main() {
 	}(newNameNode)
 	server1 := &RpcServer{nameNode: newNameNode}
 	server2 := &RpcServer{nameNode: newNameNode}
+	ip, err := common.GetOutBoundIP()
+	if err != nil {
+		fmt.Printf("get ip fail! err:%s", err)
+		return
+	}
+	newNameNode.Config.Config.Host = ip + ":" + newNameNode.Config.Config.Port
 	listen, err := net.Listen("tcp", newNameNode.Config.Config.Host)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)

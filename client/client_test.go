@@ -173,8 +173,8 @@ func TestPutFile(t *testing.T) {
 	//localFilePath := "/usr/projects_gen_data/goprogendata/trainfsdata/test/client/put/810KB.png" // 912KB / 400 = 3块
 
 	// windows
-	localFilePath := "F:\\ProjectsData\\golang\\TrainFS\\client\\put\\222.data"
-	//localFilePath := "F:\\ProjectsData\\golang\\TrainFS\\client\\put\\y.jpg"
+	//localFilePath := "F:\\ProjectsData\\golang\\TrainFS\\client\\put\\111.data"
+	localFilePath := "F:\\ProjectsData\\golang\\TrainFS\\client\\put\\y.jpg"
 
 	// nameNode`s remotePath format linux
 	remotePath1 := "/root/app"
@@ -183,10 +183,14 @@ func TestPutFile(t *testing.T) {
 	//remotePaths = append(remotePaths, remotePath1, remotePath2, remotePath3)
 	remotePaths = append(remotePaths, remotePath1)
 	for _, path := range remotePaths {
-		client.PutFile(localFilePath, path)
+		_, err := client.PutFile(localFilePath, path)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 	}
 	fmt.Printf("=======================================================\n")
-	time.Sleep(time.Second * 2)
+	// time.Sleep(time.Second * 2)
 	for _, path := range remotePaths {
 		dirMetaList, err := client.ListDir(path)
 		if err != nil {
@@ -196,7 +200,7 @@ func TestPutFile(t *testing.T) {
 		fmt.Printf("listDir(%s):%s \n", path, dirMetaList.String())
 	}
 	fmt.Printf("=======================================================\n")
-	time.Sleep(time.Second * 1)
+	// time.Sleep(time.Second * 1)
 	// linux client get path
 	//localPath2 := "/usr/projects_gen_data/goprogendata/trainfsdata/test/client/get2"
 
@@ -205,8 +209,8 @@ func TestPutFile(t *testing.T) {
 
 	// nameNode`s remotePath format linux
 	//remoteFilePath2 := "/root/app/810KB.png"
-	remoteFilePath2 := "/root/app/222.data"
-	//remoteFilePath2 := "/root/app/y.jpg"
+	//remoteFilePath2 := "/root/app/222.data"
+	remoteFilePath2 := "/root/app/y.jpg"
 	file, err := client.GetFile(localPath2, remoteFilePath2)
 	if err != nil {
 		fmt.Printf("getFile(%s) ,err:%s \n", remoteFilePath2, err)
