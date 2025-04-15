@@ -3,7 +3,7 @@ module github.com/kebukeYi/TrainFS
 go 1.23.0
 
 require (
-	github.com/kebukeYi/TrainDB v1.0.8
+	github.com/kebukeYi/TrainDB v1.0.9
 	github.com/shirou/gopsutil/v3 v3.24.4
 	github.com/stretchr/testify v1.10.0
 	google.golang.org/grpc v1.64.0

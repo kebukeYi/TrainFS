@@ -15,6 +15,8 @@ github.com/kebukeYi/TrainDB v1.0.7 h1:qJHgpcO04qU58Zx+7TZDiQt4z0z9XauMncc028QnDb
 github.com/kebukeYi/TrainDB v1.0.7/go.mod h1:QrUVyM+aKgHwfd84pX+A7wJrx+iYA5blj62ey786468=
 github.com/kebukeYi/TrainDB v1.0.8 h1:ehWTS81rGJEIDuB6qKWns+J5uxKOM9/DlXLUZTog1KA=
 github.com/kebukeYi/TrainDB v1.0.8/go.mod h1:QrUVyM+aKgHwfd84pX+A7wJrx+iYA5blj62ey786468=
+github.com/kebukeYi/TrainDB v1.0.9 h1:wVL759BnylTRf+LZtiR0JazokO3ZKMf+CRa6QBUtsZo=
+github.com/kebukeYi/TrainDB v1.0.9/go.mod h1:QrUVyM+aKgHwfd84pX+A7wJrx+iYA5blj62ey786468=
 github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0/go.mod h1:zJYVVT2jmtg6P3p1VtQj7WsuWi/y4VnjVBn7F8KPB3I=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
