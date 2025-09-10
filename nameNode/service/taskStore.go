@@ -6,21 +6,21 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/kebukeYi/TrainDB"
-	DBcommon "github.com/kebukeYi/TrainDB/common"
-	"github.com/kebukeYi/TrainDB/lsm"
-	"github.com/kebukeYi/TrainDB/model"
 	"github.com/kebukeYi/TrainFS/common"
+	"github.com/kebukeYi/TrainKV"
+	DBcommon "github.com/kebukeYi/TrainKV/common"
+	"github.com/kebukeYi/TrainKV/lsm"
+	"github.com/kebukeYi/TrainKV/model"
 	"log"
 )
 
 type TaskStoreManger struct {
 	path string
-	db   *TrainDB.TrainKVDB
+	db   *TrainKV.TrainKV
 }
 
 func OpenTaskStoreManger(path string) *TaskStoreManger {
-	trainKVDB, err, _ := TrainDB.Open(lsm.GetLSMDefaultOpt(path))
+	trainKVDB, err, _ := TrainKV.Open(lsm.GetLSMDefaultOpt(path))
 	if err != nil {
 		log.Fatalln(" TaskStoreManger Open trainKVDB fail,", err)
 	}
@@ -39,7 +39,7 @@ func (m *TaskStoreManger) PutReplications(key string, value []*Replication) erro
 	}
 	if data != nil {
 		entry := model.NewEntry([]byte(key), data)
-		err = m.db.Set(&entry)
+		err = m.db.Set(entry)
 		if err != nil {
 			return err
 		}
@@ -78,7 +78,7 @@ func (m *TaskStoreManger) PutTrashes(key string, value []string) error {
 	}
 	if data != nil {
 		entry := model.NewEntry([]byte(key), data)
-		err = m.db.Set(&entry)
+		err = m.db.Set(entry)
 		if err != nil {
 			return err
 		}

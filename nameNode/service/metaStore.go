@@ -5,21 +5,21 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"github.com/kebukeYi/TrainDB"
-	DBCommon "github.com/kebukeYi/TrainDB/common"
-	"github.com/kebukeYi/TrainDB/lsm"
-	"github.com/kebukeYi/TrainDB/model"
 	"github.com/kebukeYi/TrainFS/common"
+	"github.com/kebukeYi/TrainKV"
+	DBCommon "github.com/kebukeYi/TrainKV/common"
+	"github.com/kebukeYi/TrainKV/lsm"
+	"github.com/kebukeYi/TrainKV/model"
 	"log"
 )
 
 type MetaStoreManger struct {
 	path string
-	db   *TrainDB.TrainKVDB
+	db   *TrainKV.TrainKV
 }
 
 func OpenDataStoreManger(path string) *MetaStoreManger {
-	trainKVDB, err, _ := TrainDB.Open(lsm.GetLSMDefaultOpt(path))
+	trainKVDB, err, _ := TrainKV.Open(lsm.GetLSMDefaultOpt(path))
 	if err != nil {
 		log.Fatalln(" DataStoreManger Open trainKVDB fail,", err)
 	}

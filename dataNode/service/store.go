@@ -6,21 +6,21 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/kebukeYi/TrainDB"
-	DBCommon "github.com/kebukeYi/TrainDB/common"
-	"github.com/kebukeYi/TrainDB/lsm"
-	"github.com/kebukeYi/TrainDB/model"
 	"github.com/kebukeYi/TrainFS/common"
 	proto "github.com/kebukeYi/TrainFS/profile"
+	"github.com/kebukeYi/TrainKV"
+	DBCommon "github.com/kebukeYi/TrainKV/common"
+	"github.com/kebukeYi/TrainKV/lsm"
+	"github.com/kebukeYi/TrainKV/model"
 )
 
 type StoreManger struct {
 	path string
-	db   *TrainDB.TrainKVDB
+	db   *TrainKV.TrainKV
 }
 
 func OpenStoreManager(path string) *StoreManger {
-	trainKVDB, err, _ := TrainDB.Open(lsm.GetLSMDefaultOpt(path))
+	trainKVDB, err, _ := TrainKV.Open(lsm.GetLSMDefaultOpt(path))
 	if err != nil {
 		fmt.Printf(" DataNode Open level.db path %s file fail,err :%s \n", path, err)
 	}
