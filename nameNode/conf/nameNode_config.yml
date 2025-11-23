@@ -6,8 +6,7 @@ Config:
   # 单位 MB
   MaxSendMsgSize: 10
   MaxRecvMsgSize: 10
-#  DataDir: /usr/projects_gen_data/goprogendata/trainfsdata/test/namenode
-  DataDir: F:\ProjectsData\golang\TrainFS\NameNode
+  DataDir: /usr/golanddata/trainfs/namenode
   # model: Single | Cluster
   Model: Single
   PeerNameNodes: [127.0.0.1:50071,127.0.0.1:50072]

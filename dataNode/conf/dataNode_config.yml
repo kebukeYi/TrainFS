@@ -7,5 +7,4 @@ Config:
   MaxSendMsgSize: 70
   MaxRecvMsgSize: 70
   HeartBeatRetry: 3
-#  DataDir: /usr/projects_gen_data/goprogendata/trainfsdata/test/datanode
-  DataDir: F:\ProjectsData\golang\TrainFS\DataNode
+  DataDir: /usr/golanddata/trainfs/datanode

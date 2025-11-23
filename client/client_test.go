@@ -38,7 +38,7 @@ func parseSize(sizeStr string) (int64, error) {
 	}
 }
 
-// createFile 快速生成指定大小的文件
+// createFile 快速生成指定大小的文件;
 func CreateEmptyFile(filename string, sizeStr string) error {
 	size, err := parseSize(sizeStr)
 	if err != nil {
@@ -68,7 +68,7 @@ func CreateEmptyFile(filename string, sizeStr string) error {
 }
 
 func TestTruncateFile(t *testing.T) {
-	localFilePath := "F:\\ProjectsData\\golang\\TrainFS\\client\\put\\456.data" // 992KB / 400 = 3块
+	localFilePath := "/usr/golanddata/trainfs/client/put/111.data" // 65MB / 400 = 3块
 	err := cli.TruncateFile(localFilePath, 1024*1024)
 	if err != nil {
 		return
@@ -96,7 +96,7 @@ func TestGetFileOfChunkName(t *testing.T) {
 	}
 }
 
-func TestMkdir(t *testing.T) {
+func TestMkdirInNameNode(t *testing.T) {
 	client := cli.NewClient()
 	remotePath1 := "/root/app/a1"
 	remotePath2 := "/root/app/a1/b2"
@@ -170,10 +170,9 @@ func TestPutFile(t *testing.T) {
 	// /usr/projects_gen_data/goprogendata/trainfsdata/test/client/put
 
 	// linux
-	//localFilePath := "/usr/projects_gen_data/goprogendata/trainfsdata/test/client/put/810KB.png" // 912KB / 400 = 3块
+	//localFilePath := "/usr/golanddata/trainfs/client/put/912KB.data" // 912KB / 400 = 3块
 
 	// windows
-	//localFilePath := "F:\\ProjectsData\\golang\\TrainFS\\client\\put\\111.data"
 	localFilePath := "F:\\ProjectsData\\golang\\TrainFS\\client\\put\\y.jpg"
 
 	// nameNode`s remotePath format linux
@@ -202,7 +201,7 @@ func TestPutFile(t *testing.T) {
 	fmt.Printf("=======================================================\n")
 	// time.Sleep(time.Second * 1)
 	// linux client get path
-	//localPath2 := "/usr/projects_gen_data/goprogendata/trainfsdata/test/client/get2"
+	//localPath2 := "/usr/golanddata/trainfs/client/get2"
 
 	// windows client get path
 	localPath2 := "F:\\ProjectsData\\golang\\TrainFS\\client\\get2"
@@ -223,7 +222,7 @@ func TestPutFile(t *testing.T) {
 func TestGetFile(t *testing.T) {
 	client := cli.NewClient()
 	// linux client get path
-	//localPath1 := "/usr/projects_gen_data/goprogendata/trainfsdata/test/client/get1"
+	//localPath1 := "/usr/golanddata/trainfs/client/get1"
 
 	// windows client get path
 	localPath1 := "F:\\ProjectsData\\golang\\TrainFS\\client\\get1"
@@ -269,7 +268,7 @@ func TestDelete(t *testing.T) {
 	time.Sleep(time.Second * 2)
 
 	// windows client get path
-	//localPath4 := "/usr/projects_gen_data/goprogendata/trainfsdata/test/client/get4"
+	//localPath4 := "/usr/golanddata/trainfs/client/get4"
 
 	// linux client get path
 	localPath4 := "F:\\ProjectsData\\golang\\TrainFS\\client\\get4"

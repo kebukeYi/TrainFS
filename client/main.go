@@ -7,8 +7,8 @@ import (
 
 func main() {
 	client := cli.NewClient()
-	localFilePathPut := "F:\\ProjectsData\\golang\\TrainFS\\client\\put\\y.jpg"
-	localPathGet := "F:\\ProjectsData\\golang\\TrainFS\\client\\get"
+	localFilePathPut := "/usr/golanddata/trainfs/client/put/912KB.data"
+	localPathGet := "/usr/golanddata/trainfs/client/get"
 
 	//remotePath := "/user/app"
 	remotePath := "/user/local"
