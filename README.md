@@ -1,123 +1,170 @@
 # TrainFS
 
-本单机文件系统,支持基本读写删除,目录等操作; 元数据存储NameNode中, 文件大小切分成块, 存储在DataNode中.
+一个参考 HDFS 架构设计的分布式文件系统，支持文件读写删除、目录管理等基本操作。元数据存储于 NameNode，文件按块切分后存储在多个 DataNode 中，支持多副本冗余。
 
----
+## 快速开始
 
-### 启动开始
-````
-NameNode节点启动
-A方式: 本地编辑器源码调试,run kind 选择 package 即可;
-注意项目参数输入指定配置信息:
-program arguments: -conf=nameNode/conf/nameNode_config.yml
+### 1. 启动 NameNode
 
-B方式: 下载源码后,进入源码目录中直接启动;
+**方式 A：IDE 调试**
+```bash
+# GoLand 中 Run Kind 选择 Package
+# Program Arguments:
+-conf=nameNode/conf/nameNode_config.yml
+```
+
+**方式 B：源码运行**
+```bash
 cd TrainFS/nameNode
 go run nameNode_ctrl.go -conf=./conf/nameNode_config.yml
+```
 
-C: 构建可执行文件方式启动;
+**方式 C：编译运行**
+```bash
 cd TrainFS/nameNode
 go build -o ./build/nameNode
-cd ../build
-./nameNode
+./build/nameNode
+```
 
-DataNode-* 多节点启动
-A方式: 本地编辑器源码调试,run kind 选择 package 即可;
-注意项目参数输入指定配置信息: 
-program arguments: -id=1 -port=9001 -conf=dataNode/conf/dataNode_config.yml
+### 2. 启动 DataNode（多节点）
 
+**方式 A：IDE 调试**
+```bash
+# Program Arguments:
+-id=1 -port=9001 -conf=dataNode/conf/dataNode_config.yml
+```
 
-B方式: 下载源码后,进入源码目录中直接启动;
+**方式 B：源码运行**
+```bash
 cd TrainFS/dataNode
 go run dataNode_ctrl.go -id=1 -port=9001 -conf=./conf/dataNode_config.yml
 go run dataNode_ctrl.go -id=2 -port=9002 -conf=./conf/dataNode_config.yml
 go run dataNode_ctrl.go -id=3 -port=9003 -conf=./conf/dataNode_config.yml
+```
 
-C方式: 构建可执行文件方式启动;
+**方式 C：编译运行**
+```bash
 cd TrainFS/dataNode
 go build -o ./build/dataNode
-cd ../build
-./dataNode -id=1 -port=9001
-./dataNode -id=2 -port=9002
-./dataNode -id=3 -port=9003
+./build/dataNode -id=1 -port=9001
+./build/dataNode -id=2 -port=9002
+./build/dataNode -id=3 -port=9003
+```
 
-进入client源码中,进行测试;
+### 3. 客户端测试
+
+```bash
+cd TrainFS/client
 go test -run TestPutFile
 go test -run TestGetFile
 go test -run TestDelete
+```
 
-额外: 重新生成.proto文件时,需要提前安装好protoc等插件;
+### 4. 重新生成 Protobuf（可选）
+
+```bash
 go get -u google.golang.org/protobuf/proto@latest
 go get -u google.golang.org/protobuf/protoc-gen-go@latest
 go get -u google.golang.org/grpc/protoc-gen-go-grpc@latest
+
 cd profile
 protoc --go_out=. --go-grpc_out=. ./*.proto
-````
+```
+
 ---
 
-举例 "TrainFS-Put流程图":
-![TrainFS-Put流程图](docs/TrainFS-Put.png )
+## 系统架构
 
-## 功能讲解
+![TrainFS-Put流程图](docs/TrainFS-Put.png)
 
-- PutFile(localFilePath, remotePath)
-    - 举例: PutFile("/home/user/test.txt", "/app")
-    - 过程: 将本地文件 localFilePath`/home/user/test.txt` 上传到文件系统中,注意文件系统并不会真正的创建 remoteFilePath`/app/test.txt`此目录文件,
-      而是基于`/app/test.txt`文件名,切分成`/app/test.txt_chunk_0`, `/app/test.txt_chunk_1`...等文件块名字,构成<remoteFilePath,[chunk_1,chunk_2,chunk_3]>
-      kv映射集合元数据,并进行持久化保存; 之后文件系统中NameNode节点返回用户指定副本数量的DataNode节点地址; 客户端仅仅把文件块发送到 primary DataNode单个节点即可;
-      文件系统DataNode节点之间会自动转发用户数据,
-      DataNode节点将文件块存储到本地文件系统中,也会记录[`/app/test.txt_chunk_2`, `/app/test.txt_chunk_3`....]kv映射元数据;DataNode接收完毕后,
-      并提交给NameNode节点,报告给NameNode本次保存了哪些数据;用户上传完毕后,可向NameNode确认文件是否上传完毕; 此时PutFile操作完成, NameNode将返回用户上传成功信息;
+---
 
-- GetFile(remoteFilePath, localPath)
-    - 举例: GutFile("/app/test.txt","/home/user")
-    - 过程：用户首先向NameNode获知remoteFilePath`/home/user/test.txt`的存储副本的多个DataNode节点地址,然后向DataNode节点请求获得文件块;
-- Mkdir(remoteDirPath)
-    - 举例: Mkdir("/home/user")
-    - 过程：在NameNode的元数据kv存储中,将remoteDirPath`/home/user`添加到元数据中,并设置状态为目录,同时找到此目录的上级目录信息,
-      将本节点添加到上层目录的子目录list中, 随后同时持久化保存;
-- DeleteFile(remoteDirPath)
-    - 举例:DeleteFile("/home/user/test.txt") || DeleteFile("/home/user")
-    - 说明:目前仅支持删除末尾文件和末尾目录,不支持删除有 含有子文件或者子文件夹 的目录;
-    - 过程:在NameNode的元数据kv存储中,将remoteDirPath`/home/user/test.txt`进行删除,同时找到此目录的上级目录信息,
-      将本节点删除，随后针对上层目录节点持久化保存更新;然后在找到对应的DataNode,进行保存Trash删除任务;此时DataNode并不会立即删除,会在随后的心跳响应中,NameNode会下发删除任务;
-      DataNode接收任务后,DataNode会删除文件块,并提交给NameNode节点,报告给NameNode本次删除了哪些数据;
-- ListDir(remoteDirPath)
-    - 举例:ListDir("/home/user")
-    - 过程:直接在NameNode的元数据存储中,查询remoteDirPath`/home/user`的节点信息,并返回给用户当前目录节点的子节点的信息列表;
-- ReName(oldRemoteDirPath,newRemoteDirPath)
-    - 举例:ReName("/home/user","/home/newUser")
-    - 过程:直接在NameNode的元数据存储中,查询remoteDirPath`/home/user`的节点信息,并判断是否为目录,并且是空目录,则进行重命名操作,否则报错返回,不支持本次操作;
+## API 说明
 
-### NameNode 元数据中心
-记录用户每一次的操作,以及文件的副本存储信息;
+### PutFile(localFilePath, remotePath)
+上传本地文件到分布式文件系统。
 
-第一步，针对用户上传文件过程，NameNode可把 remoteFilePath`/app/test.txt`文件,保存在NameNode的元数据kv存储中,此时并没有保存文件的块信息;
-第二步，根据DataNode的上传信息，NameNod在内存中做出统计，将`/app/test.txt_chunk_1`, `/app/test.txt_chunk_2`等文件块的存储地址进行持久化保存，
-再统计出 <remoteFilePath,[chunk1,chunk2,chunk3]>、<chunk_1,[dataNode1,dataNode2,dataNode3]> 两大基本核心kv映射；
+```go
+PutFile("/home/user/test.txt", "/app")
+```
 
-为了基本目标做出的维护:
+**流程**：
+1. 客户端向 NameNode 请求上传，获取 DataNode 地址链
+2. 文件按配置大小切分为多个 Chunk（如 `test.txt_chunk_0`、`test.txt_chunk_1`）
+3. 客户端将 Chunk 发送至首个 DataNode，节点间链式转发
+4. DataNode 保存后向 NameNode 提交元数据
+5. 客户端确认上传完成
 
-1. 接受并保存DataNode的注册请求和保存其DataNode上报的文件块信息，并持久化保存；
-2. 针对已经注册的DataNode，定期检测其心跳信息，如果发现心跳超时，则进行剔除，并启动文件迁移复制任务;
-3. 当用户删除文件时，NameNode会首先在本身的元数据kv存储中，删除此文件块的存储地址信息，并持久化更新; 随后在相关的DataNode发送心跳时，
-   将相关的删除文件块信息，返回给DataNode，让其随后删除，当其删除后，会再次上报给NameNode，此时NameNode会更新此DataNode的剩余磁盘空间;
-4. 文件迁移复制任务，NameNode统计出下线的DataNode节点存储了哪些文件块，然后针对这些文件块，NameNode会向拥有文件块的DataNode节点下发拷贝转发指令，
-    向其他未保存此文件块的DataNode主动发送文件块, 后面的DataNode接收数据并保存后,也会提交给NameNode节点,报告给NameNode本次保存了哪些数据;
+### GetFile(remoteFilePath, localPath)
+从分布式文件系统下载文件到本地。
 
-### DataNode
-记录所有文件块数据,接收用户上传的文件，并使用链式传递文件。
+```go
+GetFile("/app/test.txt", "/home/user")
+```
 
+**流程**：向 NameNode 查询文件块位置，从各 DataNode 获取 Chunk 后合并。
 
-为了基本目标做出的维护：
-1. DataNode在启动时，向NameNode注册自己，同时上报自己存储的磁盘空间信息；
-2. 上报一次自己的全量存储文件块情况，NameNode需要知道这个；
-3. 周期上报心跳，让NameNode知道自己还在线；
-4. 保存用户的文件块信息，DataNode会保存这些文件块信息，并记录到本地文件系统，也会持久化到本次的kv映射元数据中,[chunk1,chunk2,chunk3...];
+### Mkdir(remoteDirPath)
+创建远程目录。
 
+```go
+Mkdir("/home/user")
+```
 
-#### 下一步
-1. NameNode存储的元数据结构设计,减少锁粒度,也能更好的支持 ReName() 操作;
-2. NameNode的单点宕机问题,可升级成 分片式分布式集群,NameNode集群会根据 用户操作 进行分片,将文件负载均衡到到 各个NameNode集群中,
-每个NameNode集群会依据共识算法来保证集群可用性,进一步降低单点风险,提高可用性;
-3. 允许DataNode可先接收来自客户端的数据,然后转发给其他DataNode节点,实现文件块的快速复制,最后再提及给NameNode节点;
+### DeleteFile(remotePath)
+删除文件或空目录。
+
+```go
+DeleteFile("/home/user/test.txt")
+DeleteFile("/home/user")  // 仅支持空目录
+```
+
+**流程**：NameNode 删除元数据，通过心跳下发删除任务给 DataNode。
+
+### ListDir(remoteDirPath)
+列出目录内容。
+
+```go
+ListDir("/home/user")
+```
+
+### ReName(oldPath, newPath)
+重命名空目录。
+
+```go
+ReName("/home/user", "/home/newUser")
+```
+
+---
+
+## 核心组件
+
+### NameNode（元数据中心）
+
+负责管理文件系统的元数据，维护两大核心映射：
+- `<FilePath, [Chunk1, Chunk2, ...]>` - 文件与块的映射
+- `<ChunkName, [DataNode1, DataNode2, ...]>` - 块与副本位置的映射
+
+**职责**：
+1. 接收 DataNode 注册与心跳，管理节点状态
+2. 处理文件块提交，更新元数据映射
+3. 检测节点故障，触发副本再均衡任务
+4. 通过心跳响应下发删除/复制任务
+
+### DataNode（数据节点）
+
+负责实际数据块的存储与传输。
+
+**职责**：
+1. 启动时向 NameNode 注册，上报磁盘空间
+2. 全量上报已存储的 Chunk 信息
+3. 周期性发送心跳，执行下发的任务
+4. 接收并存储 Chunk，链式转发至下游节点
+
+---
+
+## 后续规划
+
+1. **优化元数据结构**：细化锁粒度，更好支持 ReName 操作
+2. **NameNode 高可用**：升级为分片式分布式集群，基于共识算法保证可用性
+3. **异步提交优化**：DataNode 先接收转发数据，再批量提交至 NameNode
