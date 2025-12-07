@@ -1,4 +1,7 @@
 # TrainFS
+[![Go](https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat&logo=go)](https://go.dev/)
+[![License](https://img.shields.io/badge/License-Apache_2.0-green)](https://opensource.org/licenses/Apache-2.0)
+
 
 一个参考 HDFS 架构设计的分布式文件系统，支持文件读写删除、目录管理等基本操作。元数据存储于 NameNode，文件按块切分后存储在多个 DataNode 中，支持多副本冗余。
 
