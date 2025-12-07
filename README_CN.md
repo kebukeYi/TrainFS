@@ -88,7 +88,7 @@ protoc --go_out=. --go-grpc_out=. ./*.proto
 
 ## 系统架构
 
-![TrainFS-Put流程图](doc/pngs/TrainFS-Put.png)
+![TrainFS-Put流程图](doc/pngs/TrainFS-Put_1.png)
 
 ---
 
