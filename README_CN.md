@@ -1,3 +1,13 @@
+<div align="center">
+<strong>
+<samp>
+
+[English](https://github.com/kebukeYi/TrainFS/blob/main/README.md) · [简体中文](https://github.com/kebukeYi/TrainFS/blob/main/README_CN.md)
+
+</samp>
+</strong>
+</div>
+
 # TrainFS
 [![Go](https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green)](https://opensource.org/licenses/Apache-2.0)
