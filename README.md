@@ -1,4 +1,6 @@
 # TrainFS
+[![Go](https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat&logo=go)](https://go.dev/)
+[![License](https://img.shields.io/badge/License-Apache_2.0-green)](https://opensource.org/licenses/Apache-2.0)
 
 A distributed file system designed with reference to HDFS architecture, supporting basic operations such as file read/write/delete and directory management. Metadata is stored in NameNode, files are split into blocks and stored across multiple DataNodes with multi-replica redundancy.
 
