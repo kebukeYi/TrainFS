@@ -75,7 +75,7 @@ protoc --go_out=. --go-grpc_out=. ./*.proto
 
 ## System Architecture
 
-![TrainFS-Put Flow](docs/TrainFS-Put.png)
+![TrainFS-Put Flow](doc/pngs/TrainFS-Put_1.png)
 
 ---
 
