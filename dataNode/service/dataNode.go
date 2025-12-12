@@ -309,7 +309,6 @@ func (dataNode *DataNode) CheckTask() {
 		//go dataNode.Trash(dataNode.TrashTask)
 		dataNode.TrashChan <- dataNode.TrashTask
 	}
-	// time.Sleep(time.Second * 3)
 	if len(dataNode.ReplicaTask) > 0 {
 		fmt.Printf("DataNode[%s]-%s ReplicaTask:%v; strat...\n", dataNode.Config.Host, dataNode.Config.DataNodeId, dataNode.ReplicaTask)
 		//go dataNode.Replica(dataNode.ReplicaTask)

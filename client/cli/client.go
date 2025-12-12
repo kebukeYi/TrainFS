@@ -79,8 +79,7 @@ func (c *Client) doWrite(remoteFilePath string, fileTotalSize int64, fileData []
 
 	fmt.Printf("remotePath: %s; len:%d; dataServerChain:%s;\n", remoteFilePath, len(address), address)
 	if int32(len(address)) < replicaNum {
-		fmt.Printf("DataNodeAddress.lengh:%d ; dataServerChain:%s ; replicaNum:%d \n; ",
-			len(address), address, replicaNum)
+		fmt.Printf("DataNodeAddress.lengh:%d ; dataServerChain:%s ; replicaNum:%d \n;", len(address), address, replicaNum)
 		return common.ErrEnoughReplicaDataNodeServer
 	}
 
@@ -125,7 +124,7 @@ func (c *Client) doWrite(remoteFilePath string, fileTotalSize int64, fileData []
 		Ack:              false, // 是否检测全部文件 chunk 数据;
 	}
 
-	// 客户端确认可能需要时间, 因为 dataNode 存储文件块以及转发文件,以及提交, 需要时间;
+	// 客户端确认可能需要时间, 因为 dataNode 存储文件块, 转发文件以及提交给NameNode, 需要时间;
 	confirmFileReply := c.ConfirmFile(arg)
 
 	if !confirmFileReply.GetSuccess() {
@@ -209,19 +208,19 @@ func (c *Client) GetFile(localPath string, remoteFilePath string) (*os.File, err
 				grpc.MaxCallRecvMsgSize(c.conf.Client.MaxCallRecvMsgSize*1024*1024))
 			if err != nil {
 				callBack()
-				fmt.Printf("client faile to GetChunk:%s, err:%s; \n", chunkInfo.FilePathChunkName, err)
+				fmt.Printf("client faile to GetChunk:%s, err:%s;\n", chunkInfo.FilePathChunkName, err)
 				continue
 			}
 			fileDataStream, err := chunkClient.Recv()
 			if err != nil {
 				callBack()
-				fmt.Printf("client faile to chunkClient.Recv():%s,from:%s, err:%s; \n",
+				fmt.Printf("client faile to chunkClient.Recv():%s,from:%s, err:%s;\n",
 					chunkInfo.FilePathChunkName, nodeAddress, err)
 				// 同一个 chunkName, 向下一个 dataNode 请求数据;
 				continue
 			} else {
 				callBack()
-				fmt.Printf("client chunkClient.Recv():%s,from:%s,success; \n",
+				fmt.Printf("client chunkClient.Recv():%s,from:%s,success;\n",
 					chunkInfo.FilePathChunkName, nodeAddress)
 				buf = append(buf, fileDataStream.Data...)
 				break
