@@ -6,7 +6,7 @@ Config:
   # 单位 MB
   MaxSendMsgSize: 10
   MaxRecvMsgSize: 10
-  DataDir: /usr/golanddata/trainfs/namenode
+  DataDir: /temp/golanddata/trainfs/namenode
   # model: Single | Cluster
   Model: Single
   PeerNameNodes: [127.0.0.1:50071,127.0.0.1:50072]

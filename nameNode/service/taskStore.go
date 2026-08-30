@@ -130,30 +130,27 @@ func (m *TaskStoreManger) close() error {
 }
 
 func bytes2Replications(value []byte) ([]*Replication, error) {
-	if value == nil {
+	if value == nil || len(value) == 0 {
 		return nil, common.ErrInputEmpty
 	}
 	decoder := gob.NewDecoder(bytes.NewBuffer(value))
-	buf := make([]*Replication, 0)
-	err := decoder.Decode(&value)
-	if err != nil {
+	var replications []*Replication
+	if err := decoder.Decode(&replications); err != nil {
 		return nil, err
 	}
-	return buf, nil
+	return replications, nil
 }
 
 func replications2bytes(value []*Replication) ([]byte, error) {
 	if value == nil {
 		return nil, common.ErrInputEmpty
 	}
-	buff := make([]byte, 0)
-	buf := bytes.NewBuffer(buff)
-	encoder := gob.NewEncoder(buf)
-	err := encoder.Encode(value)
-	if err != nil {
+	// 必须返回 buf.Bytes(): buffer 扩容后原切片 buff 不会被填充;
+	var buff bytes.Buffer
+	if err := gob.NewEncoder(&buff).Encode(value); err != nil {
 		return nil, err
 	}
-	return buff, nil
+	return buff.Bytes(), nil
 }
 
 func bytes2Strings(value []byte) ([]string, error) {

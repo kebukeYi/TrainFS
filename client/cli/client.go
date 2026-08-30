@@ -13,6 +13,7 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"sync"
 )
 
 type Client struct {
@@ -309,27 +310,43 @@ func (c *Client) ReName(oldPath string, newPath string) (*proto.ReNameReply, err
 	return nameReply, nil
 }
 
-func getNameNodeConnection(nameNodeAddress string) (func() error, proto.ClientToNameServiceClient) {
-	conn, err := grpc.NewClient(nameNodeAddress, grpc.WithInsecure())
-	done := func() error {
-		return conn.Close()
+// connPool 按目标地址复用 gRPC 连接, 避免每次 RPC 都重新建连; 连接随进程生命周期统一关闭;
+var connPool sync.Map // address -> *grpc.ClientConn
+
+func getOrCreateConn(address string) (*grpc.ClientConn, error) {
+	if conn, ok := connPool.Load(address); ok {
+		return conn.(*grpc.ClientConn), nil
 	}
+	conn, err := grpc.NewClient(address, grpc.WithInsecure())
+	if err != nil {
+		return nil, err
+	}
+	actual, loaded := connPool.LoadOrStore(address, conn)
+	if loaded {
+		// 并发下其他协程已存入连接, 关闭本次多余的;
+		_ = conn.Close()
+		return actual.(*grpc.ClientConn), nil
+	}
+	return conn, nil
+}
+
+func getNameNodeConnection(nameNodeAddress string) (func() error, proto.ClientToNameServiceClient) {
+	done := func() error { return nil } // 连接已池化, 不再随单次调用关闭;
+	conn, err := getOrCreateConn(nameNodeAddress)
 	if err != nil {
 		log.Printf("Did not connect to nameNodeAddress %v error %v ;\n", nameNodeAddress, err)
-		return nil, nil
+		return done, nil
 	}
 	client := proto.NewClientToNameServiceClient(conn)
 	return done, client
 }
 
 func getDataNodeConnection(dataNodeAddress string) (func() error, proto.ClientToDataServiceClient) {
-	conn, err := grpc.NewClient(dataNodeAddress, grpc.WithInsecure())
-	done := func() error {
-		return conn.Close()
-	}
+	done := func() error { return nil } // 连接已池化, 不再随单次调用关闭;
+	conn, err := getOrCreateConn(dataNodeAddress)
 	if err != nil {
 		log.Printf("Did not connect to dataNodeAddress %v error %v ;\n", dataNodeAddress, err)
-		return nil, nil
+		return done, nil
 	}
 	client := proto.NewClientToDataServiceClient(conn)
 	return done, client

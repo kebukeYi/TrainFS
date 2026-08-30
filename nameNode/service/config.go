@@ -39,7 +39,7 @@ func GetDataNodeConfig(confPath *string) *NameNodeConfig {
 	file, err := os.OpenFile(*confPath, os.O_RDWR, 0777)
 	defer file.Close()
 	if err != nil {
-		log.Fatalf(" fail to read fileName: %s, err: %s ;\n", confPath, err)
+		log.Fatalf(" fail to read fileName: %s, err: %s ;\n", *confPath, err)
 	}
 	v, err := file.Stat()
 	size := v.Size()

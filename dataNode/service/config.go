@@ -2,10 +2,11 @@ package service
 
 import (
 	"fmt"
-	"gopkg.in/yaml.v2"
 	"log"
 	"os"
 	"path/filepath"
+
+	"gopkg.in/yaml.v2"
 )
 
 type DataNodeConfig struct {
@@ -57,6 +58,7 @@ func GetDataNodeConfig(configFile *string, port *string, dataNodeId *string) *Co
 	}
 
 	dataDir := conf.Config.DataDir
+	dataDir += "_"
 	conf.Config.DataDir = filepath.Join(dataDir+conf.Config.DataNodeId, "data")
 	conf.Config.TaskDir = filepath.Join(dataDir+conf.Config.DataNodeId, "task")
 	conf.Config.MetaDir = filepath.Join(dataDir+conf.Config.DataNodeId, "meta")

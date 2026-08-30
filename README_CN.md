@@ -45,6 +45,8 @@ go build -o ./build/nameNode
 ```bash
 # Program Arguments:
 -id=1 -port=9001 -conf=dataNode/conf/dataNode_config.yml
+-id=3 -port=9002 -conf=dataNode/conf/dataNode_config.yml
+-id=2 -port=9003 -conf=dataNode/conf/dataNode_config.yml
 ```
 
 **方式 B：源码运行**

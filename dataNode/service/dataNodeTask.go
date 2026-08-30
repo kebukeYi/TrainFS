@@ -6,6 +6,8 @@ import (
 	"github.com/kebukeYi/TrainFS/common"
 	proto "github.com/kebukeYi/TrainFS/profile"
 	"github.com/shirou/gopsutil/v3/disk"
+	"google.golang.org/grpc"
+	"io"
 	"time"
 )
 
@@ -182,60 +184,71 @@ func (dataNode *DataNode) DoTrashTask() {
 }
 
 func (dataNode *DataNode) Trash(fileChunkNames []string) {
-	dataNode.mux.Lock()
-	defer dataNode.mux.Unlock()
+	// 先持久化任务清单, 执行到一半宕机可续跑;
 	err := dataNode.taskStoreManger.PutTrashes(trashKey, fileChunkNames)
 	if err != nil {
 		fmt.Printf("DataNode[%s]-%s taskStoreManger.PutTrashes(%s) fail. err:%s \n",
 			dataNode.Config.Host, dataNode.Config.DataNodeId, trashKey, err)
 		return
 	}
-	fileChunkNameSize := len(fileChunkNames)
 	fmt.Printf("DataNode[%s]-%s rev #Trash fileChunkNames:%v \n",
 		dataNode.Config.Host, dataNode.Config.DataNodeId, fileChunkNames)
 
+	fileChunkNameSize := len(fileChunkNames)
 	for i, fileChunkName := range fileChunkNames {
-		if _, ok := dataNode.allChunkInfos[fileChunkName]; !ok {
-			fmt.Printf("DataNode[%s]-%s Trash fileChunkName:%s not exist! \n", dataNode.Config.Host, dataNode.Config.DataNodeId, fileChunkName)
+		// 只在操作内存索引时持锁; 磁盘删除与提交网络的耗时操作均在锁外;
+		dataNode.mux.Lock()
+		tempChunkInfo, ok := dataNode.allChunkInfos[fileChunkName]
+		if ok {
+			delete(dataNode.allChunkInfos, fileChunkName)
+			// 同步持久化索引, 避免重启后已删除的chunk随索引复活;
+			err = dataNode.metaStoreManger.PutChunkInfos(AllChunkInfosKey, dataNode.allChunkInfos)
+		}
+		dataNode.mux.Unlock()
+		if !ok {
+			fmt.Printf("DataNode[%s]-%s Trash fileChunkName:%s not exist! \n",
+				dataNode.Config.Host, dataNode.Config.DataNodeId, fileChunkName)
 			continue
 		}
-		fmt.Printf("DataNode[%s]-%s for delete the fileChunkName:%v \n", dataNode.Config.Host, dataNode.Config.DataNodeId, fileChunkName)
-		tempChunkInfo := dataNode.allChunkInfos[fileChunkName]
-		delete(dataNode.allChunkInfos, fileChunkName)
-		err := dataNode.dataStoreManger.Delete(fileChunkName)
 		if err != nil {
+			fmt.Printf("DataNode[%s]-%s AllChunkInfos,StoreManger.PutChunkInfos(%s); error: %s \n",
+				dataNode.Config.Host, dataNode.Config.DataNodeId, AllChunkInfosKey, err)
+		}
+		fmt.Printf("DataNode[%s]-%s for delete the fileChunkName:%v \n",
+			dataNode.Config.Host, dataNode.Config.DataNodeId, fileChunkName)
+		if err = dataNode.dataStoreManger.Delete(fileChunkName); err != nil {
 			fmt.Printf("DataNode[%s]-%s dataStoreManger.Delete(%s) fail. err:%v \n",
 				dataNode.Config.Host, dataNode.Config.DataNodeId, fileChunkName, err)
+			// 任务保留在 taskStore, 下次启动继续;
 			return
-		} else {
-			_, err = dataNode.CommitChunk(&proto.CommitChunkArg{
-				FileChunkName:   fileChunkName,
-				FilePathName:    tempChunkInfo.FilePathName,
-				FileSize:        tempChunkInfo.ChunkSize,
-				Operation:       proto.ChunkReplicateStatus_DeleteFileChunk,
-				ChunkId:         tempChunkInfo.ChunkId,
-				SrcAddress:      dataNode.Config.Host,
-				DataNodeAddress: []string{dataNode.Config.Host},
-			}, 4)
-			if err != nil {
-				// todo 应该重试，重试失败后,应该保存到本地;
-				fmt.Printf("DataNode[%s]-%s CommitChunk(%s) type:%s; fail. err:%s \n",
-					dataNode.Config.Host, dataNode.Config.DataNodeId, fileChunkName,
-					proto.ChunkReplicateStatus_DeleteFileChunk, err)
-				continue
-			} else {
-				fmt.Printf("DataNode[%s]-%s CommitChunk(%s) type:%s; success.\n",
-					dataNode.Config.Host, dataNode.Config.DataNodeId, fileChunkName,
-					proto.ChunkReplicateStatus_DeleteFileChunk)
+		}
+		if _, err = dataNode.CommitChunk(&proto.CommitChunkArg{
+			FileChunkName:   fileChunkName,
+			FilePathName:    tempChunkInfo.FilePathName,
+			FileSize:        tempChunkInfo.ChunkSize,
+			Operation:       proto.ChunkReplicateStatus_DeleteFileChunk,
+			ChunkId:         tempChunkInfo.ChunkId,
+			SrcAddress:      dataNode.Config.Host,
+			DataNodeAddress: []string{dataNode.Config.Host},
+		}, 4); err != nil {
+			// 提交失败: 剩余任务(含当前)保留在 taskStore, 下次启动继续;
+			fmt.Printf("DataNode[%s]-%s CommitChunk(%s) type:%s; fail. err:%s \n",
+				dataNode.Config.Host, dataNode.Config.DataNodeId, fileChunkName,
+				proto.ChunkReplicateStatus_DeleteFileChunk, err)
+			return
+		}
+		fmt.Printf("DataNode[%s]-%s CommitChunk(%s) type:%s; success.\n",
+			dataNode.Config.Host, dataNode.Config.DataNodeId, fileChunkName,
+			proto.ChunkReplicateStatus_DeleteFileChunk)
+		if i+1 < fileChunkNameSize {
+			if err = dataNode.taskStoreManger.PutTrashes(trashKey, fileChunkNames[i+1:]); err != nil {
+				fmt.Printf("DataNode[%s]-%s taskStoreManger.PutTrashes(%s) fail. err:%v \n",
+					dataNode.Config.Host, dataNode.Config.DataNodeId, trashKey, err)
+				return
 			}
-			if i+1 >= fileChunkNameSize {
-				break
-			} else {
-				err = dataNode.taskStoreManger.PutTrashes(trashKey, fileChunkNames[i+1:])
-				fmt.Printf("DataNode[%s]-%s taskStoreManger.PutTrashes(%s) success.\n",
-					dataNode.Config.Host, dataNode.Config.DataNodeId,
-					fileChunkNames[i+1:])
-			}
+			fmt.Printf("DataNode[%s]-%s taskStoreManger.PutTrashes(%s) success.\n",
+				dataNode.Config.Host, dataNode.Config.DataNodeId,
+				fileChunkNames[i+1:])
 		}
 	}
 
@@ -244,7 +257,6 @@ func (dataNode *DataNode) Trash(fileChunkNames []string) {
 		fmt.Printf("DataNode[%s]-%s taskStoreManger.Delete(%s) fail. err:%v \n",
 			dataNode.Config.Host, dataNode.Config.DataNodeId,
 			trashKey, err)
-		return
 	}
 }
 
@@ -258,8 +270,7 @@ func (dataNode *DataNode) DoReplicaTask() {
 }
 
 func (dataNode *DataNode) Replica(replications []*Replication) {
-	dataNode.mux.Lock()
-	defer dataNode.mux.Unlock()
+	// Replica 只访问 dataStore/taskStore(独立LSM)与网络, 不操作内存索引, 全程无需持全局锁;
 	err := dataNode.taskStoreManger.PutReplications(replicationKey, replications)
 	if err != nil {
 		fmt.Printf("DataNode[%s]-%s taskStoreManger.PutReplications(%s) fail. err:%s \n",
@@ -268,82 +279,111 @@ func (dataNode *DataNode) Replica(replications []*Replication) {
 	}
 	replicationSize := len(replications)
 	for i, replication := range replications {
-		callBack, dataServiceClient, err := dataNode.getGrpcDataServerConn(replication.ToAddress)
-		if err != nil {
-			fmt.Printf("DataNode[%s]-%s getGrpcDataServerConn(%s) to Replica fail; err:%v \n",
-				dataNode.Config.Host, dataNode.Config.DataNodeId, replication.ToAddress, err)
-			callBack()
-			continue
-		}
-		for {
-			putChunkClient, err := dataServiceClient.PutChunk(context.Background())
-			if err != nil {
-				fmt.Printf("DataNode[%s]-%s dataServiceClient.PutChunk() to Replica fail; err:%v \n",
-					dataNode.Config.Host, dataNode.Config.DataNodeId, err)
-			}
-
-			bytes, err := dataNode.dataStoreManger.Get(replication.FilePathChunkName)
-			if err != nil {
-				fmt.Printf("DataNode[%s]-%s dataStoreManger.Get(%s) fail. err:%v \n",
-					dataNode.Config.Host, dataNode.Config.DataNodeId,
-					replication.FilePathChunkName, err)
-				return
-			}
-
-			err = putChunkClient.Send(&proto.FileDataStream{
-				Data:              bytes,
-				FilePathName:      replication.FilePathName,
-				FilePathChunkName: replication.FilePathChunkName,
-				ChunkId:           common.GetChunkIdOfFileChunkName(replication.FilePathChunkName),
-				Address:           dataNode.Config.Host,
-				SrcName:           dataNode.name,
-				Operation:         proto.ChunkReplicateStatus_LostToReplicate,
-				DataNodeChain:     nil,
-			})
-			fmt.Printf("DataNode[%s]-%s putChunkClient.Send(DataLen:%d, FilePathName:%s, FilePathChunkName: %s; type:%s; to:%s;\n",
+		if err = dataNode.replicateChunk(replication); err != nil {
+			// 复制失败: 剩余任务(含当前)保留在 taskStore, 下次启动由 CheckTask 继续;
+			fmt.Printf("DataNode[%s]-%s replicate chunk(%s) to %s fail, keep %d tasks for retry. err:%v \n",
 				dataNode.Config.Host, dataNode.Config.DataNodeId,
-				len(bytes),
-				replication.FilePathName, replication.FilePathChunkName,
-				proto.ChunkReplicateStatus_LostToReplicate,
-				replication.ToAddress)
-			if err != nil {
-				fmt.Printf("DataNode[%s]-%s putChunkClient.Send({Data, FilePathName: %s, FilePathChunkName: %s; type:%s; to:%s; fail. err: %s \n",
+				replication.FilePathChunkName, replication.ToAddress,
+				replicationSize-i, err)
+			if err = dataNode.taskStoreManger.PutReplications(replicationKey, replications[i:]); err != nil {
+				fmt.Printf("DataNode[%s]-%s taskStoreManger.PutReplications(%v) fail. err:%s \n",
 					dataNode.Config.Host, dataNode.Config.DataNodeId,
-					replication.FilePathName, replication.FilePathName,
-					proto.ChunkReplicateStatus_LostToReplicate,
-					replication.ToAddress, err)
-				time.Sleep(time.Second * 1)
-			} else {
-				callBack()
-				break
+					replications[i:], err)
 			}
+			return
 		}
-
-		if i+1 >= replicationSize {
-			break
-		} else {
-			err = dataNode.metaStoreManger.PutReplications(replicationKey, replications[i+1:])
-			if err != nil {
-				fmt.Printf("DataNode[%s]-%s metaStoreManger.PutReplications(%v) fail. err:%s \n",
+		if i+1 < replicationSize {
+			if err = dataNode.taskStoreManger.PutReplications(replicationKey, replications[i+1:]); err != nil {
+				fmt.Printf("DataNode[%s]-%s taskStoreManger.PutReplications(%v) fail. err:%s \n",
 					dataNode.Config.Host, dataNode.Config.DataNodeId,
 					replications[i+1:], err)
 			} else {
-				fmt.Printf("DataNode[%s]-%s metaStoreManger.PutReplications(%v) success. \n",
+				fmt.Printf("DataNode[%s]-%s taskStoreManger.PutReplications(%v) success. \n",
 					dataNode.Config.Host, dataNode.Config.DataNodeId,
 					replications[i+1:])
 			}
 		}
 	}
 
-	err = dataNode.taskStoreManger.Delete(replicationKey)
-	if err != nil {
+	if err = dataNode.taskStoreManger.Delete(replicationKey); err != nil {
 		fmt.Printf("DataNode[%s]-%s taskStoreManger.Delete(%s) fail. err:%v \n",
 			dataNode.Config.Host, dataNode.Config.DataNodeId,
 			replicationKey, err)
-		return
 	} else {
 		fmt.Printf("DataNode[%s]-%s taskStoreManger.Delete(%s) success. \n",
 			dataNode.Config.Host, dataNode.Config.DataNodeId,
 			replicationKey)
 	}
+}
+
+// replicateChunk 将单个chunk复制到目标节点, 带有界重试;
+// 成功的判定依据是目标节点处理完毕(落盘+提交NameNode)后的响应;
+func (dataNode *DataNode) replicateChunk(replication *Replication) error {
+	const maxRetry = 3
+	var lastErr error
+	for attempt := 0; attempt <= maxRetry; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt) * time.Second)
+		}
+		callBack, dataServiceClient, err := dataNode.getGrpcDataServerConn(replication.ToAddress)
+		if err != nil {
+			lastErr = err
+			fmt.Printf("DataNode[%s]-%s getGrpcDataServerConn(%s) to Replica fail; err:%v \n",
+				dataNode.Config.Host, dataNode.Config.DataNodeId, replication.ToAddress, err)
+			continue
+		}
+		putChunkClient, err := dataServiceClient.PutChunk(context.Background(),
+			grpc.MaxCallSendMsgSize(dataNode.Config.MaxSendMsgSize*1024*1024))
+		if err != nil {
+			callBack()
+			lastErr = err
+			fmt.Printf("DataNode[%s]-%s dataServiceClient.PutChunk() to Replica fail; err:%v \n",
+				dataNode.Config.Host, dataNode.Config.DataNodeId, err)
+			continue
+		}
+
+		bytes, err := dataNode.dataStoreManger.Get(replication.FilePathChunkName)
+		if err != nil {
+			callBack()
+			// 本地已无此块, 重试没有意义, 直接失败并保留任务;
+			return fmt.Errorf("dataNode[%s] get chunk(%s) fail. err:%v",
+				dataNode.Config.Host, replication.FilePathChunkName, err)
+		}
+
+		err = putChunkClient.Send(&proto.FileDataStream{
+			Data:              bytes,
+			FilePathName:      replication.FilePathName,
+			FilePathChunkName: replication.FilePathChunkName,
+			ChunkId:           common.GetChunkIdOfFileChunkName(replication.FilePathChunkName),
+			Address:           dataNode.Config.Host,
+			SrcName:           dataNode.name,
+			Operation:         proto.ChunkReplicateStatus_LostToReplicate,
+			DataNodeChain:     nil,
+		})
+		if err != nil {
+			callBack()
+			lastErr = err
+			fmt.Printf("DataNode[%s]-%s putChunkClient.Send(FilePathChunkName: %s; type:%s; to:%s; fail. err: %v \n",
+				dataNode.Config.Host, dataNode.Config.DataNodeId,
+				replication.FilePathChunkName,
+				proto.ChunkReplicateStatus_LostToReplicate,
+				replication.ToAddress, err)
+			continue
+		}
+		// 等待目标节点处理完成, 其响应即本次复制成功的依据;
+		if _, err = putChunkClient.CloseAndRecv(); err != nil && err != io.EOF {
+			callBack()
+			lastErr = err
+			fmt.Printf("DataNode[%s]-%s putChunkClient.CloseAndRecv(%s) to:%s; fail. err: %v \n",
+				dataNode.Config.Host, dataNode.Config.DataNodeId,
+				replication.FilePathChunkName, replication.ToAddress, err)
+			continue
+		}
+		callBack()
+		fmt.Printf("DataNode[%s]-%s replicate chunk %s to %s success. \n",
+			dataNode.Config.Host, dataNode.Config.DataNodeId,
+			replication.FilePathChunkName, replication.ToAddress)
+		return nil
+	}
+	return lastErr
 }

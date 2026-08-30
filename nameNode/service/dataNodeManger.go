@@ -3,9 +3,10 @@ package service
 import (
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/kebukeYi/TrainFS/common"
 	proto "github.com/kebukeYi/TrainFS/profile"
-	"time"
 )
 
 const (
@@ -90,6 +91,10 @@ func (nn *NameNode) HeartBeat(arg *proto.HeartBeatArg) (*proto.HeartBeatReply, e
 	heartBeatReply := &proto.HeartBeatReply{}
 	if dataNodeInfo, ok := nn.dataNodeInfos[arg.DataNodeAddress]; ok {
 		dataNodeInfo.HeartBeatTimeStamp = time.Now().UnixMilli()
+		// 心跳到达即恢复上线: 宕机节点(网络抖动/长GC)恢复后无需重新注册;
+		dataNodeInfo.Status = datanodeUp
+		// 心跳携带最新磁盘余量, 修正 CommitChunk 增量统计的误差;
+		dataNodeInfo.FreeSpace = arg.GetFreeSpace()
 		if dataNodeInfo.replicationChunkNames != nil && len(dataNodeInfo.replicationChunkNames) > 0 {
 			heartBeatReply.FilePathNames = make([]string, len(dataNodeInfo.replicationChunkNames))
 			heartBeatReply.FilePathChunkNames = make([]string, len(dataNodeInfo.replicationChunkNames))
@@ -297,21 +302,37 @@ func (nn *NameNode) HandleNormalToReplicate(arg *proto.CommitChunkArg) error {
 	return nil
 }
 
+// HandleFileChunkReplicateTask 复制任务的目标dataNode提交完成后,
+// 从持有该任务的源dataNode队列中剔除(提交方是目标节点, 任务却挂在源节点队列上);
 func (nn *NameNode) HandleFileChunkReplicateTask(arg *proto.CommitChunkArg) error {
-	dataNodeAddress := arg.GetDataNodeAddress()[0]
-	dataNodeInfo := nn.dataNodeInfos[dataNodeAddress]
-	replications := dataNodeInfo.replicationChunkNames
-	newReplications := make([]*Replication, 0)
-	for _, task := range replications {
-		if task.FilePathChunkName != arg.FileChunkName {
+	toAddress := arg.GetDataNodeAddress()[0]
+	for address, dataNodeInfo := range nn.dataNodeInfos {
+		newReplications := make([]*Replication, 0)
+		changed := false
+		for _, task := range dataNodeInfo.replicationChunkNames {
+			// 目标节点与提交方一致且块名相同, 才认定该任务完成;
+			if task.FilePathChunkName == arg.FileChunkName && task.ToAddress == toAddress {
+				changed = true
+				continue
+			}
 			newReplications = append(newReplications, task)
 		}
-	}
-	dataNodeInfo.replicationChunkNames = newReplications
-	dataNodeReplicaKey := GetDataNodeReplicaKey(dataNodeAddress)
-	err := nn.taskStore.PutReplications(dataNodeReplicaKey, newReplications)
-	if err != nil {
-		return err
+		if !changed {
+			continue
+		}
+		dataNodeInfo.replicationChunkNames = newReplications
+		dataNodeReplicaKey := GetDataNodeReplicaKey(address)
+		// 任务已全部完成, 直接清理持久化记录, 避免重新注册时复活;
+		if len(newReplications) == 0 {
+			if err := nn.taskStore.Delete(dataNodeReplicaKey); err != nil {
+				return err
+			}
+			continue
+		}
+		err := nn.taskStore.PutReplications(dataNodeReplicaKey, newReplications)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -328,6 +349,10 @@ func (nn *NameNode) HandleFileChunkDeleteTask(arg *proto.CommitChunkArg) error {
 	}
 	dataNodeInfo.trashChunkNames = newTrashNames
 	dataNodeTrashKey := GetDataNodeTrashKey(dataNodeAddress)
+	// 任务已全部完成, 直接清理持久化记录, 避免重新注册时复活;
+	if len(newTrashNames) == 0 {
+		return nn.taskStore.Delete(dataNodeTrashKey)
+	}
 	err := nn.taskStore.PutTrashes(dataNodeTrashKey, newTrashNames)
 	if err != nil {
 		return err
@@ -341,17 +366,19 @@ func (nn *NameNode) LiveDetection(*proto.LiveDetectionArg) (*proto.LiveDetection
 
 func (nn *NameNode) CheckHeartBeat() {
 	for {
+		nn.mux.Lock()
 		for address, dataNodeInfo := range nn.dataNodeInfos {
 			// 距离上一次的上线时间超过心跳检测时间,则认为该dataNode已经宕机;
 			if time.Now().UnixMilli()-dataNodeInfo.HeartBeatTimeStamp >
 				int64(nn.Config.Config.DataNodeHeartBeatTimeout) && dataNodeInfo.Status == datanodeUp {
-				fmt.Printf("NameNode CheckHeartBeat() dataNode:%s down! now dataNodeInfos[%v] \n",
-					address, nn.dataNodeInfos)
-				// todo 要不要持久化 dataNode 的状态,以及NameNode中的内存队列
+				// 先同步置为下线, 防止下个检测周期对同一节点重复触发再均衡;
+				dataNodeInfo.Status = datanodeDown
+				fmt.Printf("NameNode CheckHeartBeat() dataNode:%s down! \n", address)
 				// 执行dataNode下线后的资源清理工作;
 				go nn.ReplicationBalance(address)
 			}
 		}
+		nn.mux.Unlock()
 		time.Sleep(time.Duration(nn.Config.Config.DataNodeHeartBeatInterval) * time.Millisecond)
 	}
 }

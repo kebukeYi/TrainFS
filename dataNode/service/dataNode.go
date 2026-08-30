@@ -3,10 +3,11 @@ package service
 import (
 	"context"
 	"fmt"
-	proto "github.com/kebukeYi/TrainFS/profile"
-	"google.golang.org/grpc"
 	"sync"
 	"time"
+
+	proto "github.com/kebukeYi/TrainFS/profile"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -42,8 +43,6 @@ func NewDataNode(configFile *string, port *string, dataNodeId *string) *DataNode
 	dataNode := &DataNode{}
 	dataNode.Config = GetDataNodeConfig(configFile, port, dataNodeId)
 	//common.ClearDir(dataNode.Config.DataDir)
-	//common.ClearDir(dataNode.Config.MetaDir)
-	//common.ClearDir(dataNode.Config.TaskDir)
 	dataNode.recoveryData()
 	chunkInfos, err := dataNode.metaStoreManger.GetChunkInfos(AllChunkInfosKey)
 	if err != nil {
@@ -279,11 +278,29 @@ func (dataNode *DataNode) Write(fileName string, data []byte) error {
 	return dataNode.dataStoreManger.Put(fileName, data)
 }
 
-func (dataNode *DataNode) getGrpcDataServerConn(address string) (func() error, proto.ClientToDataServiceClient, error) {
-	clientConn, err := grpc.NewClient(address, grpc.WithInsecure())
-	done := func() error {
-		return clientConn.Close()
+// grpcConnPool 按目标地址复用 gRPC 连接, 避免每次 RPC 都重新建连; 连接随进程生命周期统一关闭;
+var grpcConnPool sync.Map // address -> *grpc.ClientConn
+
+func getOrCreateGrpcConn(address string) (*grpc.ClientConn, error) {
+	if conn, ok := grpcConnPool.Load(address); ok {
+		return conn.(*grpc.ClientConn), nil
 	}
+	conn, err := grpc.NewClient(address, grpc.WithInsecure())
+	if err != nil {
+		return nil, err
+	}
+	actual, loaded := grpcConnPool.LoadOrStore(address, conn)
+	if loaded {
+		// 并发下其他协程已存入连接, 关闭本次多余的;
+		_ = conn.Close()
+		return actual.(*grpc.ClientConn), nil
+	}
+	return conn, nil
+}
+
+func (dataNode *DataNode) getGrpcDataServerConn(address string) (func() error, proto.ClientToDataServiceClient, error) {
+	done := func() error { return nil } // 连接已池化, 不再随单次调用关闭;
+	clientConn, err := getOrCreateGrpcConn(address)
 	if err != nil {
 		return done, nil, err
 	}
@@ -292,10 +309,8 @@ func (dataNode *DataNode) getGrpcDataServerConn(address string) (func() error, p
 }
 
 func (dataNode *DataNode) getGrpcNameNodeServerConn(address string) (func() error, proto.DataToNameServiceClient, error) {
-	clientConn, err := grpc.NewClient(address, grpc.WithInsecure())
-	done := func() error {
-		return clientConn.Close()
-	}
+	done := func() error { return nil } // 连接已池化, 不再随单次调用关闭;
+	clientConn, err := getOrCreateGrpcConn(address)
 	if err != nil {
 		return done, nil, err
 	}

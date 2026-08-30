@@ -34,12 +34,9 @@ func (m *StoreManger) PutChunkInfos(key string, value map[string]*proto.ChunkInf
 	data, err := chunkInfos2bytes(value)
 	if data != nil {
 		entry := model.Entry{Key: []byte(key), Value: data}
-		m.db.Set(&entry)
-		if err != nil {
-			return err
-		}
+		return m.db.Set(&entry)
 	}
-	return nil
+	return err
 }
 
 func (m *StoreManger) GetChunkInfos(key string) (map[string]*proto.ChunkInfo, error) {
@@ -151,28 +148,25 @@ func bytes2Replications(value []byte) ([]*Replication, error) {
 		return nil, common.ErrInputEmpty
 	}
 	decoder := gob.NewDecoder(bytes.NewBuffer(value))
-	buf := make([]*Replication, 0)
-	err := decoder.Decode(&value)
-	if err != nil {
+	var replications []*Replication
+	if err := decoder.Decode(&replications); err != nil {
 		fmt.Printf("bytes2Replications[] decode error:%s \n", err)
 		return nil, err
 	}
-	return buf, nil
+	return replications, nil
 }
 
 func replications2bytes(value []*Replication) ([]byte, error) {
-	if value == nil || len(value) == 0 {
+	if value == nil {
 		return nil, common.ErrInputEmpty
 	}
-	buff := make([]byte, 0)
-	buf := bytes.NewBuffer(buff)
-	encoder := gob.NewEncoder(buf)
-	err := encoder.Encode(value)
-	if err != nil {
+	// 必须返回 buf.Bytes(): buffer 扩容后原切片 buff 不会被填充;
+	var buff bytes.Buffer
+	if err := gob.NewEncoder(&buff).Encode(value); err != nil {
 		fmt.Printf("replications2bytes[%v] encode error:%s \n", value, err)
 		return nil, err
 	}
-	return buff, nil
+	return buff.Bytes(), nil
 }
 
 func bytes2ChunkInfos(value []byte) (map[string]*proto.ChunkInfo, error) {
@@ -190,7 +184,8 @@ func bytes2ChunkInfos(value []byte) (map[string]*proto.ChunkInfo, error) {
 }
 
 func chunkInfos2bytes(value map[string]*proto.ChunkInfo) ([]byte, error) {
-	if value == nil || len(value) == 0 {
+	// 空map也允许编码: 删光所有chunk后需要持久化空索引, 否则重启后已删除的chunk会复活;
+	if value == nil {
 		return nil, common.ErrInputEmpty
 	}
 	var buff bytes.Buffer

@@ -3,14 +3,15 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/kebukeYi/TrainFS/client/cli"
-	"github.com/kebukeYi/TrainFS/common"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kebukeYi/TrainFS/client/cli"
+	"github.com/kebukeYi/TrainFS/common"
 )
 
 // parseSize 解析类似 "1GB", "512MB" 的字符串为字节数
@@ -173,7 +174,7 @@ func TestPutFile(t *testing.T) {
 	//localFilePath := "/usr/golanddata/trainfs/client/put/912KB.data" // 912KB / 400 = 3块
 
 	// windows
-	localFilePath := "F:\\ProjectsData\\golang\\TrainFS\\client\\put\\y.jpg"
+	localFilePath := "/temp/golanddata/trainfs/client/put/y.jpg"
 
 	// nameNode`s remotePath format linux
 	remotePath1 := "/root/app"
@@ -204,7 +205,7 @@ func TestPutFile(t *testing.T) {
 	//localPath2 := "/usr/golanddata/trainfs/client/get2"
 
 	// windows client get path
-	localPath2 := "F:\\ProjectsData\\golang\\TrainFS\\client\\get2"
+	localPath2 := "/temp/golanddata/trainfs/client/get"
 
 	// nameNode`s remotePath format linux
 	//remoteFilePath2 := "/root/app/810KB.png"

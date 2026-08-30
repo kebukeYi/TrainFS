@@ -3,12 +3,13 @@ package service
 import (
 	"errors"
 	"fmt"
-	"github.com/kebukeYi/TrainFS/common"
-	proto "github.com/kebukeYi/TrainFS/profile"
-	DBcommon "github.com/kebukeYi/TrainKV/common"
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/kebukeYi/TrainFS/common"
+	proto "github.com/kebukeYi/TrainFS/profile"
+	DBcommon "github.com/kebukeYi/TrainKV/common"
 )
 
 type NameNode struct {
@@ -36,7 +37,6 @@ type NameNode struct {
 func NewNameNode(configFile *string) *NameNode {
 	nameNode := &NameNode{}
 	nameNode.Config = GetDataNodeConfig(configFile)
-	//common.ClearDir(nameNode.Config.Config.DataDir)
 	//common.ClearDir(nameNode.Config.Config.TaskDir)
 	nameNode.metaStore = OpenDataStoreManger(nameNode.Config.Config.DataDir)
 	nameNode.taskStore = OpenTaskStoreManger(nameNode.Config.Config.TaskDir)
@@ -214,50 +214,55 @@ func (nn *NameNode) DeleteFile(arg *proto.FileOperationArg) (*proto.DeleteFileRe
 		}
 		if len(getFile.ChildList) > 0 {
 			return nil, common.ErrCanNotDelNotEmptyDir
-		} else {
-			err = nn.metaStore.Delete(meta.KeyFileName)
-			delete(parentNode.ChildList, fileName)
-			nn.metaStore.PutFileMeta(parentNode.KeyFileName, parentNode)
+		}
+		if err = nn.metaStore.Delete(meta.KeyFileName); err != nil {
+			return nil, err
+		}
+		delete(parentNode.ChildList, fileName)
+		if err = nn.metaStore.PutFileMeta(parentNode.KeyFileName, parentNode); err != nil {
+			return nil, err
 		}
 	} else { // 2. 删除的是一个文件, 那么就需要删除文件块信息,并下发给dataNode删除任务;
 		meta, err = nn.metaStore.GetFileMeta(meta.KeyFileName) // 尝试获取最新的 dataNode 的上传信息;
 		if err != nil {
 			return nil, err
 		}
-		go func() { // 新协程完成删除 文件块信息;
-			for _, chunk := range meta.Chunks {
-				// 获得这个文件块的所在的几个dataNode信息;
-				replicaMetas := nn.chunkLocation[chunk.ChunkName]
-				for _, replicaMeta := range replicaMetas { // 当前 chunk 的几个副本;
-					nodeInfo := nn.dataNodeInfos[replicaMeta.DataNodeAddress]
-					nodeInfo.trashChunkNames = append(nodeInfo.trashChunkNames, chunk.ChunkName)
-					nodeTrashKey := GetDataNodeTrashKey(nodeInfo.Address)
-					// 持久化dataNode的删除任务; 会不会出现覆盖之前的未执行的任务? 不会, 每次保存的都是全量任务;
-					// dataNode 执行完任务后, 提交后, nameNode剔除掉删除任务;
-					err = nn.taskStore.PutTrashes(nodeTrashKey, nodeInfo.trashChunkNames)
-					if err != nil {
-						fmt.Printf("NameNode for PutTrashes delete chunk:%s, replicaIP:%s err:%v ;\n",
-							chunk.ChunkName, replicaMeta.DataNodeAddress, err)
-						return
-					}
-					fmt.Printf("NameNode for PutTrashes delete chunk:%s, replica:%s ;\n", chunk.ChunkName, replicaMeta.DataNodeAddress)
-				}
-				// 删除 <chunk*,dataNode>内存映射;
-				delete(nn.chunkLocation, chunk.ChunkName)
-				// 删除 <dataNode,chunks> 内存映射;
-			}
-		}()
-		// 主协程完成 删除文件信息;
-		err = nn.metaStore.Delete(meta.KeyFileName)
+		// 先删除文件元数据, 再派发块删除任务: 若中途宕机, 宁可残留孤儿块(由ChunkReport回收),
+		// 也不能出现文件还在而块已被删的情况;
+		if err = nn.metaStore.Delete(meta.KeyFileName); err != nil {
+			return nil, err
+		}
 		delete(parentNode.ChildList, fileName)
-		nn.metaStore.PutFileMeta(parentNode.KeyFileName, parentNode)
-		// fmt.Printf("NameNode dataStore.Delete(%s);\n", meta.KeyFileName)
-		if err != nil {
-			fmt.Printf("NameNode dataStore.Delete(%s), err:%v ;\n", meta.KeyFileName, err)
+		if err = nn.metaStore.PutFileMeta(parentNode.KeyFileName, parentNode); err != nil {
+			return nil, err
+		}
+		// 派发删除任务: 当前已持有写锁, 直接同步执行,
+		// 避免后台协程在锁外访问 chunkLocation/dataNodeInfos 产生数据竞争;
+		for _, chunk := range meta.Chunks {
+			// 获得这个文件块的所在的几个dataNode信息;
+			replicaMetas := nn.chunkLocation[chunk.ChunkName]
+			for _, replicaMeta := range replicaMetas { // 当前 chunk 的几个副本;
+				nodeInfo := nn.dataNodeInfos[replicaMeta.DataNodeAddress]
+				if nodeInfo == nil {
+					continue
+				}
+				nodeInfo.trashChunkNames = append(nodeInfo.trashChunkNames, chunk.ChunkName)
+				nodeTrashKey := GetDataNodeTrashKey(nodeInfo.Address)
+				// 持久化dataNode的删除任务; 会不会出现覆盖之前的未执行的任务? 不会, 每次保存的都是全量任务;
+				// dataNode 执行完任务后, 提交后, nameNode剔除掉删除任务;
+				if err = nn.taskStore.PutTrashes(nodeTrashKey, nodeInfo.trashChunkNames); err != nil {
+					fmt.Printf("NameNode for PutTrashes delete chunk:%s, replicaIP:%s err:%v ;\n",
+						chunk.ChunkName, replicaMeta.DataNodeAddress, err)
+					return nil, err
+				}
+				fmt.Printf("NameNode for PutTrashes delete chunk:%s, replica:%s ;\n", chunk.ChunkName, replicaMeta.DataNodeAddress)
+			}
+			// 删除 <chunk*,dataNode> 内存映射; <dataNode,chunks> 由 dataNode 提交 DeleteFileChunk 时清理;
+			delete(nn.chunkLocation, chunk.ChunkName)
 		}
 	}
 	fmt.Printf("NameNode.DeleteFile(%s);\n", pathFileName)
-	return nil, err
+	return &proto.DeleteFileReply{Success: true}, nil
 }
 
 func (nn *NameNode) ListDir(arg *proto.FileOperationArg) (*proto.DirMetaList, error) {
@@ -339,7 +344,7 @@ func (nn *NameNode) ReName(arg *proto.FileOperationArg) (*proto.ReNameReply, err
 	newDirName, newPath := common.SplitFileNamePath(newPathFileName)
 	// 只允许修改子目录名称, 不允许修改目录路径;
 	if oldPath != newPath {
-		return reply, common.ErrCanNotDelNotEmptyDir
+		return reply, common.ErrNotSupported
 	}
 	parentNode, err := nn.checkPathOrCreate(oldPath, false)
 	if err != nil {
@@ -367,7 +372,8 @@ func (nn *NameNode) ReName(arg *proto.FileOperationArg) (*proto.ReNameReply, err
 				IsDir:       true,
 				ChildList:   make(map[string]*FileMeta),
 			}
-			parentNode.ChildList[newPathFileName] = fileMeta
+			// ChildList 的键是裸目录名, 不能存完整路径;
+			parentNode.ChildList[newDirName] = fileMeta
 			err = nn.metaStore.PutFileMeta(fileMeta.KeyFileName, fileMeta)
 			if err != nil {
 				return reply, err
